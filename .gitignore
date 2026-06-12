@@ -38,6 +38,9 @@ data/
 # Logs
 *.log
 
+# Modelos entrenados generados por la CLI
+models/*.json
+
 # OS
 .DS_Store
 Thumbs.db

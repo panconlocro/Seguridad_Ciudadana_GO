@@ -70,8 +70,8 @@ func median(data []float64) float64 {
 }
 
 func main() {
-	inputFile := "data/raw/Crime_Data_from_2020_to_Present.csv"
-	outputFile := "data/processed/Crime_Data_Clean.csv"
+	inputFile := "scripts/data/raw/Crime_Data_from_2020_to_Present.csv"
+	outputFile := "scripts/Cleanse/data/processed/Crime_Data_Clean.csv"
 
 	if len(os.Args) > 1 {
 		inputFile = os.Args[1]
@@ -157,13 +157,13 @@ func main() {
 	// PASS 2: Cleaning Data and Feature Engineering
 	// ---------------------------------------------------------
 	log.Println("Pass 2: Cleaning data, generating features, and writing output...")
-	
+
 	// Rewind the file back to the start
 	_, err = inFile.Seek(0, io.SeekStart)
 	if err != nil {
 		log.Fatalf("Failed to seek input file: %v", err)
 	}
-	
+
 	reader = csv.NewReader(inFile)
 	reader.ReuseRecord = true
 
@@ -247,7 +247,7 @@ func main() {
 			year = fmt.Sprintf("%d", dateOcc.Year())
 			month = fmt.Sprintf("%d", int(dateOcc.Month()))
 			dayOfWeek = dateOcc.Weekday().String()
-			
+
 			// Standardize Date format to ISO implicitly
 			if idx, ok := outIdxMap["DATE OCC"]; ok {
 				outRecord[idx] = dateOcc.Format("2006-01-02 15:04:05")
@@ -260,7 +260,7 @@ func main() {
 			daysOcc := dateOcc.Truncate(24 * time.Hour)
 			diff := daysRpt.Sub(daysOcc).Hours() / 24.0
 			daysToReport = fmt.Sprintf("%.0f", diff)
-			
+
 			if idx, ok := outIdxMap["Date Rptd"]; ok {
 				outRecord[idx] = dateRptd.Format("2006-01-02 15:04:05")
 			}

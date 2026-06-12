@@ -149,6 +149,9 @@ func procesarBloque(workerID int, headers []string, filas [][]string, resultCh c
 
 // CargarCSVConcurrente carga el CSV dividiéndolo en bloques paralelos
 func CargarCSVConcurrente(path string, numWorkers int) []CrimeClean {
+	if numWorkers < 1 {
+		log.Fatalf("El número de workers debe ser mayor que cero")
+	}
 	fmt.Printf("\n[Cargador] Iniciando carga concurrente con %d workers...\n", numWorkers)
 	fmt.Printf("[Cargador] Leyendo archivo: %s\n", path)
 
@@ -157,6 +160,13 @@ func CargarCSVConcurrente(path string, numWorkers int) []CrimeClean {
 	// Paso 1: Leer todas las filas (necesario para dividir en bloques)
 	headers, filas := leerTodasLasFilas(path)
 	fmt.Printf("[Cargador] ✔ Filas leídas: %d\n", len(filas))
+	if len(filas) == 0 {
+		log.Fatalf("El CSV no contiene filas de datos")
+	}
+	if numWorkers > len(filas) {
+		numWorkers = len(filas)
+		fmt.Printf("[Cargador] Workers ajustados a %d por cantidad de filas\n", numWorkers)
+	}
 
 	// Paso 2: Dividir en bloques iguales
 	tamBloque := len(filas) / numWorkers

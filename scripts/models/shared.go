@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/csv"
 	"fmt"
+	"io"
 	"log"
 	"math"
 	"math/rand"
@@ -12,6 +13,27 @@ import (
 	"strings"
 	"sync"
 )
+
+var columnasRequeridas = []string{
+	"hour",
+	"day_of_week",
+	"month",
+	"year",
+	"days_to_report",
+	"area",
+	"lat",
+	"lon",
+	"crm_cd",
+	"crm_cd_desc",
+	"part_1_2",
+	"premis_cd",
+	"weapon_desc",
+	"vict_age",
+	"vict_sex",
+	"vict_descent",
+	"victim_identified",
+	"status_desc",
+}
 
 // ═══════════════════════════════════════════════════════
 // ESTRUCTURA DE REGISTRO LIMPIO (desde Crime_Data_Clean.csv)
@@ -93,9 +115,17 @@ func dayOfWeekToInt(s string) int {
 }
 
 func CargarCSVLimpio(path string) []CrimeClean {
+	registros, err := CargarCSVLimpioE(path)
+	if err != nil {
+		log.Fatalf("Error cargando CSV limpio: %v", err)
+	}
+	return registros
+}
+
+func CargarCSVLimpioE(path string) ([]CrimeClean, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		log.Fatalf("Error abriendo CSV limpio: %v", err)
+		return nil, fmt.Errorf("no se pudo abrir %q: %w", path, err)
 	}
 	defer file.Close()
 
@@ -105,12 +135,21 @@ func CargarCSVLimpio(path string) []CrimeClean {
 	// Leer encabezado
 	headers, err := reader.Read()
 	if err != nil {
-		log.Fatalf("Error leyendo encabezado: %v", err)
+		return nil, fmt.Errorf("no se pudo leer el encabezado de %q: %w", path, err)
 	}
 
 	idx := make(map[string]int)
 	for i, h := range headers {
 		idx[h] = i
+	}
+	var faltantes []string
+	for _, columna := range columnasRequeridas {
+		if _, ok := idx[columna]; !ok {
+			faltantes = append(faltantes, columna)
+		}
+	}
+	if len(faltantes) > 0 {
+		return nil, fmt.Errorf("CSV inválido: faltan columnas requeridas: %s", strings.Join(faltantes, ", "))
 	}
 
 	get := func(row []string, col string) string {
@@ -135,8 +174,11 @@ func CargarCSVLimpio(path string) []CrimeClean {
 
 	for {
 		row, err := reader.Read()
-		if err != nil {
+		if err == io.EOF {
 			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("error leyendo fila %d de %q: %w", rowNum+2, path, err)
 		}
 		rowNum++
 
@@ -187,8 +229,11 @@ func CargarCSVLimpio(path string) []CrimeClean {
 		}
 	}
 
+	if len(registros) < 2 {
+		return nil, fmt.Errorf("CSV inválido: se requieren al menos 2 registros válidos y se encontraron %d", len(registros))
+	}
 	fmt.Printf("✔ Total registros cargados: %d\n", len(registros))
-	return registros
+	return registros, nil
 }
 
 // ═══════════════════════════════════════════════════════
@@ -196,11 +241,34 @@ func CargarCSVLimpio(path string) []CrimeClean {
 // ═══════════════════════════════════════════════════════
 
 func SplitTrainTest(muestras []Muestra, ratio float64) ([]Muestra, []Muestra) {
-	rand.Shuffle(len(muestras), func(i, j int) {
-		muestras[i], muestras[j] = muestras[j], muestras[i]
+	train, test, err := SplitTrainTestConSeed(muestras, ratio, 42)
+	if err != nil {
+		return nil, nil
+	}
+	return train, test
+}
+
+func SplitTrainTestConSeed(muestras []Muestra, ratio float64, seed int64) ([]Muestra, []Muestra, error) {
+	if len(muestras) < 2 {
+		return nil, nil, fmt.Errorf("se requieren al menos 2 muestras para separar train/test")
+	}
+	if ratio <= 0 || ratio >= 1 {
+		return nil, nil, fmt.Errorf("el ratio train/test debe estar entre 0 y 1")
+	}
+
+	barajadas := append([]Muestra(nil), muestras...)
+	rng := rand.New(rand.NewSource(seed))
+	rng.Shuffle(len(barajadas), func(i, j int) {
+		barajadas[i], barajadas[j] = barajadas[j], barajadas[i]
 	})
-	splitIdx := int(float64(len(muestras)) * ratio)
-	return muestras[:splitIdx], muestras[splitIdx:]
+	splitIdx := int(float64(len(barajadas)) * ratio)
+	if splitIdx < 1 {
+		splitIdx = 1
+	}
+	if splitIdx >= len(barajadas) {
+		splitIdx = len(barajadas) - 1
+	}
+	return barajadas[:splitIdx], barajadas[splitIdx:], nil
 }
 
 // ═══════════════════════════════════════════════════════
@@ -234,10 +302,19 @@ func MSE(valores []float64) float64 {
 }
 
 func Bootstrap(muestras []Muestra, rng *rand.Rand) []Muestra {
-	n := len(muestras)
+	return bootstrapN(muestras, len(muestras), rng)
+}
+
+func bootstrapN(muestras []Muestra, n int, rng *rand.Rand) []Muestra {
+	if n > len(muestras) {
+		n = len(muestras)
+	}
+	if n < 1 || len(muestras) == 0 {
+		return nil
+	}
 	resultado := make([]Muestra, n)
 	for i := range resultado {
-		resultado[i] = muestras[rng.Intn(n)]
+		resultado[i] = muestras[rng.Intn(len(muestras))]
 	}
 	return resultado
 }
@@ -249,7 +326,7 @@ func ClaseMayoritaria(muestras []Muestra) string {
 	}
 	mejor, maxCount := "", 0
 	for clase, count := range conteo {
-		if count > maxCount {
+		if count > maxCount || (count == maxCount && (mejor == "" || clase < mejor)) {
 			maxCount = count
 			mejor = clase
 		}
@@ -276,14 +353,23 @@ func MejorSplitClasificacion(muestras []Muestra, featureIdxs []int) (int, float6
 	mejorFeature, mejorUmbral, mejorGini := -1, 0.0, math.MaxFloat64
 
 	for _, fIdx := range featureIdxs {
-		vals := make([]float64, len(muestras))
-		for i, m := range muestras {
-			vals[i] = m.Features[fIdx]
+		seen := make(map[float64]bool)
+		var vals []float64
+		for _, m := range muestras {
+			valor := m.Features[fIdx]
+			if !seen[valor] {
+				seen[valor] = true
+				vals = append(vals, valor)
+			}
 		}
 		sort.Float64s(vals)
 
-		for i := 0; i < len(vals)-1; i++ {
-			umbral := (vals[i] + vals[i+1]) / 2.0
+		step := 1
+		if len(vals) > 20 {
+			step = len(vals) / 20
+		}
+		for i := 0; i < len(vals)-step; i += step {
+			umbral := (vals[i] + vals[i+step]) / 2.0
 			izqConteo := make(map[string]int)
 			derConteo := make(map[string]int)
 			izqTotal, derTotal := 0, 0
@@ -306,7 +392,7 @@ func MejorSplitClasificacion(muestras []Muestra, featureIdxs []int) (int, float6
 			giniPond := float64(izqTotal)/total*Gini(izqConteo, izqTotal) +
 				float64(derTotal)/total*Gini(derConteo, derTotal)
 
-			if giniPond < mejorGini {
+			if giniPond < mejorGini || (giniPond == mejorGini && fIdx < mejorFeature) {
 				mejorGini = giniPond
 				mejorFeature = fIdx
 				mejorUmbral = umbral
@@ -320,14 +406,23 @@ func MejorSplitRegresion(muestras []Muestra, featureIdxs []int, usarLat bool) (i
 	mejorFeature, mejorUmbral, mejorMSE := -1, 0.0, math.MaxFloat64
 
 	for _, fIdx := range featureIdxs {
-		vals := make([]float64, len(muestras))
-		for i, m := range muestras {
-			vals[i] = m.Features[fIdx]
+		seen := make(map[float64]bool)
+		var vals []float64
+		for _, m := range muestras {
+			valor := m.Features[fIdx]
+			if !seen[valor] {
+				seen[valor] = true
+				vals = append(vals, valor)
+			}
 		}
 		sort.Float64s(vals)
 
-		for i := 0; i < len(vals)-1; i++ {
-			umbral := (vals[i] + vals[i+1]) / 2.0
+		step := 1
+		if len(vals) > 20 {
+			step = len(vals) / 20
+		}
+		for i := 0; i < len(vals)-step; i += step {
+			umbral := (vals[i] + vals[i+step]) / 2.0
 			var izqVals, derVals []float64
 
 			for _, m := range muestras {
@@ -350,7 +445,7 @@ func MejorSplitRegresion(muestras []Muestra, featureIdxs []int, usarLat bool) (i
 			msePond := float64(len(izqVals))/n*MSE(izqVals) +
 				float64(len(derVals))/n*MSE(derVals)
 
-			if msePond < mejorMSE {
+			if msePond < mejorMSE || (msePond == mejorMSE && fIdx < mejorFeature) {
 				mejorMSE = msePond
 				mejorFeature = fIdx
 				mejorUmbral = umbral
@@ -390,11 +485,13 @@ func ConstruirArbolClasificacion(muestras []Muestra, profundidad, maxProf, minMu
 		}
 	}
 
+	rngIzq := rand.New(rand.NewSource(rng.Int63()))
+	rngDer := rand.New(rand.NewSource(rng.Int63()))
 	return &Nodo{
 		FeatureIdx: fIdx,
 		Umbral:     umbral,
-		Izquierda:  ConstruirArbolClasificacion(izq, profundidad+1, maxProf, minMuestras, numFeatures, rng),
-		Derecha:    ConstruirArbolClasificacion(der, profundidad+1, maxProf, minMuestras, numFeatures, rng),
+		Izquierda:  ConstruirArbolClasificacion(izq, profundidad+1, maxProf, minMuestras, numFeatures, rngIzq),
+		Derecha:    ConstruirArbolClasificacion(der, profundidad+1, maxProf, minMuestras, numFeatures, rngDer),
 	}
 }
 
@@ -420,17 +517,25 @@ func ConstruirArbolRegresion(muestras []Muestra, profundidad, maxProf, minMuestr
 		}
 	}
 
+	rngIzq := rand.New(rand.NewSource(rng.Int63()))
+	rngDer := rand.New(rand.NewSource(rng.Int63()))
 	return &Nodo{
 		FeatureIdx: fIdx,
 		Umbral:     umbral,
-		Izquierda:  ConstruirArbolRegresion(izq, profundidad+1, maxProf, minMuestras, numFeatures, usarLat, rng),
-		Derecha:    ConstruirArbolRegresion(der, profundidad+1, maxProf, minMuestras, numFeatures, usarLat, rng),
+		Izquierda:  ConstruirArbolRegresion(izq, profundidad+1, maxProf, minMuestras, numFeatures, usarLat, rngIzq),
+		Derecha:    ConstruirArbolRegresion(der, profundidad+1, maxProf, minMuestras, numFeatures, usarLat, rngDer),
 	}
 }
 
 func PredecirClasificacion(nodo *Nodo, features []float64) string {
+	if nodo == nil {
+		return ""
+	}
 	if nodo.EsHoja {
 		return nodo.ClaseHoja
+	}
+	if nodo.FeatureIdx < 0 || nodo.FeatureIdx >= len(features) {
+		return ""
 	}
 	if features[nodo.FeatureIdx] <= nodo.Umbral {
 		return PredecirClasificacion(nodo.Izquierda, features)
@@ -439,8 +544,14 @@ func PredecirClasificacion(nodo *Nodo, features []float64) string {
 }
 
 func PredecirRegresion(nodo *Nodo, features []float64) float64 {
+	if nodo == nil {
+		return 0
+	}
 	if nodo.EsHoja {
 		return nodo.ValorHoja
+	}
+	if nodo.FeatureIdx < 0 || nodo.FeatureIdx >= len(features) {
+		return 0
 	}
 	if features[nodo.FeatureIdx] <= nodo.Umbral {
 		return PredecirRegresion(nodo.Izquierda, features)
@@ -485,6 +596,7 @@ func mejorSplitParalelo(muestras []Muestra, featureIdxs []int) (int, float64) {
 					vals = append(vals, v)
 				}
 			}
+			sort.Float64s(vals)
 
 			step := 1
 			if len(vals) > 20 {
@@ -529,7 +641,7 @@ func mejorSplitParalelo(muestras []Muestra, featureIdxs []int) (int, float64) {
 
 	mejorFeature, mejorUmbral, mejorGini := -1, 0.0, math.MaxFloat64
 	for r := range resultCh {
-		if r.giniVal < mejorGini {
+		if r.giniVal < mejorGini || (r.giniVal == mejorGini && r.fIdx < mejorFeature) {
 			mejorGini = r.giniVal
 			mejorFeature = r.fIdx
 			mejorUmbral = r.umbral
@@ -570,13 +682,13 @@ func construirArbolParalelo(muestras []Muestra, profundidad, maxProf, minMuestra
 	}
 
 	nodo := &Nodo{FeatureIdx: fIdx, Umbral: umbral}
+	rngIzq := rand.New(rand.NewSource(rng.Int63()))
+	rngDer := rand.New(rand.NewSource(rng.Int63()))
 
 	// Paralelizar ramas solo en niveles superiores
 	if profundidad < 3 && len(izq) > 500 && len(der) > 500 {
 		var wg sync.WaitGroup
 		wg.Add(2)
-		rngIzq := rand.New(rand.NewSource(rng.Int63()))
-		rngDer := rand.New(rand.NewSource(rng.Int63()))
 		go func() {
 			defer wg.Done()
 			nodo.Izquierda = construirArbolParalelo(izq, profundidad+1, maxProf, minMuestras, numFeatures, rngIzq)
@@ -587,8 +699,8 @@ func construirArbolParalelo(muestras []Muestra, profundidad, maxProf, minMuestra
 		}()
 		wg.Wait()
 	} else {
-		nodo.Izquierda = construirArbolParalelo(izq, profundidad+1, maxProf, minMuestras, numFeatures, rng)
-		nodo.Derecha = construirArbolParalelo(der, profundidad+1, maxProf, minMuestras, numFeatures, rng)
+		nodo.Izquierda = construirArbolParalelo(izq, profundidad+1, maxProf, minMuestras, numFeatures, rngIzq)
+		nodo.Derecha = construirArbolParalelo(der, profundidad+1, maxProf, minMuestras, numFeatures, rngDer)
 	}
 	return nodo
 }
