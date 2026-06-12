@@ -197,12 +197,11 @@ func ConsultarModelo3(modelo *Modelo3) {
 	}
 }
 
-func main() {
+func EjecutarModelo3(datos []CrimeClean, numArboles, maxProf, minMuestras int) {
 	fmt.Println("═══════════════════════════════════════════")
 	fmt.Println("  MODELO 3 — PROBABILIDAD DE ARRESTO")
 	fmt.Println("═══════════════════════════════════════════")
-	datos := CargarCSVLimpio("../../data/processed/Crime_Data_Clean.csv")
-	modelo := EntrenarModelo3(datos, 10, 8, 50)
+	modelo := EntrenarModelo3(datos, numArboles, maxProf, minMuestras)
 	ConsultarModelo3(modelo)
 }
 
