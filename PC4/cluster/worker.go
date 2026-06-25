@@ -226,3 +226,69 @@ func cargarModeloJSON(ruta string) (*ModeloJSON, error) {
 	}
 	return &modelo, nil
 }
+
+// inferirConModelo ejecuta inferencia usando un modelo cargado
+// Función standalone usada por NodoTCP para predicciones por TCP
+func inferirConModelo(modelo *ModeloJSON, features []float64) (map[string]interface{}, error) {
+	switch modelo.Tipo {
+	case "model1":
+		if modelo.Modelo1 == nil {
+			return nil, fmt.Errorf("modelo1 no cargado")
+		}
+		votos := make(map[string]int)
+		for _, arbol := range modelo.Modelo1.Arboles {
+			votos[predecirClasificacion(arbol, features)]++
+		}
+		mejor, maxV := "", 0
+		for clase, v := range votos {
+			if v > maxV {
+				maxV, mejor = v, clase
+			}
+		}
+		confianza := float64(maxV) / float64(modelo.Modelo1.NumArboles) * 100
+		return map[string]interface{}{
+			"tipo_crimen": mejor,
+			"confianza":   fmt.Sprintf("%.2f%%", confianza),
+		}, nil
+
+	case "model2":
+		if modelo.Modelo2 == nil {
+			return nil, fmt.Errorf("modelo2 no cargado")
+		}
+		sumLat, sumLon := 0.0, 0.0
+		n := float64(modelo.Modelo2.NumArboles)
+		for i := 0; i < modelo.Modelo2.NumArboles; i++ {
+			sumLat += predecirRegresion(modelo.Modelo2.ArbolesLat[i], features)
+			sumLon += predecirRegresion(modelo.Modelo2.ArbolesLon[i], features)
+		}
+		lat, lon := sumLat/n, sumLon/n
+		return map[string]interface{}{
+			"latitud":   lat,
+			"longitud":  lon,
+			"gmaps_url": fmt.Sprintf("https://maps.google.com/?q=%.6f,%.6f", lat, lon),
+		}, nil
+
+	case "model3":
+		if modelo.Modelo3 == nil {
+			return nil, fmt.Errorf("modelo3 no cargado")
+		}
+		votosArresto := 0
+		for _, arbol := range modelo.Modelo3.Arboles {
+			if predecirClasificacion(arbol, features) == "ARRESTO" {
+				votosArresto++
+			}
+		}
+		prob := float64(votosArresto) / float64(modelo.Modelo3.NumArboles)
+		clase := "NO_ARRESTO"
+		if prob >= 0.5 {
+			clase = "ARRESTO"
+		}
+		return map[string]interface{}{
+			"prediccion":           clase,
+			"probabilidad_arresto": fmt.Sprintf("%.2f%%", prob*100),
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("tipo de modelo desconocido: %s", modelo.Tipo)
+	}
+}
