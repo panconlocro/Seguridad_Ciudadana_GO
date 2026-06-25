@@ -17,15 +17,17 @@ import (
 // HANDLERS DE LA API REST
 // ═══════════════════════════════════════════════════════
 
-// Handler agrupa coordinador y cliente MongoDB
+// Handler agrupa coordinador, bases de datos y WebSocket hub
 type Handler struct {
 	coord *cluster.Coordinador
 	mongo *db.ClienteMongo
+	redis *db.ClienteRedis // puede ser nil si Redis no está disponible
+	hub   *HubWS
 }
 
 // NuevoHandler crea los handlers con sus dependencias
-func NuevoHandler(coord *cluster.Coordinador, mongo *db.ClienteMongo) *Handler {
-	return &Handler{coord: coord, mongo: mongo}
+func NuevoHandler(coord *cluster.Coordinador, mongo *db.ClienteMongo, redis *db.ClienteRedis, hub *HubWS) *Handler {
+	return &Handler{coord: coord, mongo: mongo, redis: redis, hub: hub}
 }
 
 // -- Request / Response types --
@@ -104,6 +106,24 @@ func (h *Handler) guardarEnMongo(modelo, nodo string, features map[string]interf
 	}
 }
 
+// broadcastPrediccion notifica a clientes WebSocket sobre una nueva predicción
+func (h *Handler) broadcastPrediccion(modelo, nodo string, resultado map[string]interface{}, duracionMs int64, desdeCache bool) {
+	if h.hub == nil {
+		return
+	}
+	h.hub.Broadcast(MensajeWS{
+		Tipo: "prediccion",
+		Datos: map[string]interface{}{
+			"modelo":      modelo,
+			"nodo":        nodo,
+			"resultado":   resultado,
+			"duracion_ms": duracionMs,
+			"desde_cache": desdeCache,
+			"timestamp":   time.Now().UTC().Format(time.RFC3339),
+		},
+	})
+}
+
 // -- Endpoints --
 
 // PredecirTipoCrimen POST /predict/crime-type
@@ -125,6 +145,20 @@ func (h *Handler) PredecirTipoCrimen(w http.ResponseWriter, r *http.Request) {
 		float64(req.VictimIdentified), float64(req.DaysToReport),
 	}
 
+	// Verificar caché Redis
+	if h.redis != nil {
+		if cached, ok := h.redis.ObtenerCache("model1", features); ok {
+			respOK(w, map[string]interface{}{
+				"modelo":      "model1",
+				"prediccion":  cached,
+				"desde_cache": true,
+				"duracion_ms": 0,
+			})
+			go h.broadcastPrediccion("model1", "redis-cache", cached, 0, true)
+			return
+		}
+	}
+
 	log.Printf("[API] /predict/crime-type — features: %v\n", features)
 	inicio := time.Now()
 	resultado, err := h.coord.Predecir("model1", features)
@@ -138,6 +172,7 @@ func (h *Handler) PredecirTipoCrimen(w http.ResponseWriter, r *http.Request) {
 		"nodo_worker": resultado.NodoID,
 		"prediccion":  resultado.Resultado,
 		"duracion_ms": resultado.DuracionMs,
+		"desde_cache": false,
 	})
 
 	featureMap := map[string]interface{}{
@@ -145,7 +180,12 @@ func (h *Handler) PredecirTipoCrimen(w http.ResponseWriter, r *http.Request) {
 		"area": req.Area, "premis_cd": req.PremisCd, "part_1_2": req.Part12,
 		"victim_identified": req.VictimIdentified, "days_to_report": req.DaysToReport,
 	}
-	go h.guardarEnMongo("model1", resultado.NodoID, featureMap, resultado.Resultado, time.Since(inicio).Milliseconds())
+	duracion := time.Since(inicio).Milliseconds()
+	go h.guardarEnMongo("model1", resultado.NodoID, featureMap, resultado.Resultado, duracion)
+	if h.redis != nil {
+		go h.redis.CachearPrediccion("model1", features, resultado.Resultado)
+	}
+	go h.broadcastPrediccion("model1", resultado.NodoID, resultado.Resultado, resultado.DuracionMs, false)
 }
 
 // PredecirZonaRiesgo POST /predict/risk-zone
@@ -167,6 +207,20 @@ func (h *Handler) PredecirZonaRiesgo(w http.ResponseWriter, r *http.Request) {
 		float64(req.Area),
 	}
 
+	// Verificar caché Redis
+	if h.redis != nil {
+		if cached, ok := h.redis.ObtenerCache("model2", features); ok {
+			respOK(w, map[string]interface{}{
+				"modelo":      "model2",
+				"prediccion":  cached,
+				"desde_cache": true,
+				"duracion_ms": 0,
+			})
+			go h.broadcastPrediccion("model2", "redis-cache", cached, 0, true)
+			return
+		}
+	}
+
 	log.Printf("[API] /predict/risk-zone — features: %v\n", features)
 	inicio := time.Now()
 	resultado, err := h.coord.Predecir("model2", features)
@@ -180,6 +234,7 @@ func (h *Handler) PredecirZonaRiesgo(w http.ResponseWriter, r *http.Request) {
 		"nodo_worker": resultado.NodoID,
 		"prediccion":  resultado.Resultado,
 		"duracion_ms": resultado.DuracionMs,
+		"desde_cache": false,
 	})
 
 	featureMap := map[string]interface{}{
@@ -187,7 +242,12 @@ func (h *Handler) PredecirZonaRiesgo(w http.ResponseWriter, r *http.Request) {
 		"crm_cd": req.CrmCd, "premis_cd": req.PremisCd, "part_1_2": req.Part12,
 		"area": req.Area,
 	}
-	go h.guardarEnMongo("model2", resultado.NodoID, featureMap, resultado.Resultado, time.Since(inicio).Milliseconds())
+	duracion := time.Since(inicio).Milliseconds()
+	go h.guardarEnMongo("model2", resultado.NodoID, featureMap, resultado.Resultado, duracion)
+	if h.redis != nil {
+		go h.redis.CachearPrediccion("model2", features, resultado.Resultado)
+	}
+	go h.broadcastPrediccion("model2", resultado.NodoID, resultado.Resultado, resultado.DuracionMs, false)
 }
 
 // PredecirProbArresto POST /predict/arrest-prob
@@ -209,6 +269,20 @@ func (h *Handler) PredecirProbArresto(w http.ResponseWriter, r *http.Request) {
 		float64(req.VictimIdentified), float64(req.DaysToReport), float64(req.Part12),
 	}
 
+	// Verificar caché Redis
+	if h.redis != nil {
+		if cached, ok := h.redis.ObtenerCache("model3", features); ok {
+			respOK(w, map[string]interface{}{
+				"modelo":      "model3",
+				"prediccion":  cached,
+				"desde_cache": true,
+				"duracion_ms": 0,
+			})
+			go h.broadcastPrediccion("model3", "redis-cache", cached, 0, true)
+			return
+		}
+	}
+
 	log.Printf("[API] /predict/arrest-prob — features: %v\n", features)
 	inicio := time.Now()
 	resultado, err := h.coord.Predecir("model3", features)
@@ -222,6 +296,7 @@ func (h *Handler) PredecirProbArresto(w http.ResponseWriter, r *http.Request) {
 		"nodo_worker": resultado.NodoID,
 		"prediccion":  resultado.Resultado,
 		"duracion_ms": resultado.DuracionMs,
+		"desde_cache": false,
 	})
 
 	featureMap := map[string]interface{}{
@@ -230,7 +305,12 @@ func (h *Handler) PredecirProbArresto(w http.ResponseWriter, r *http.Request) {
 		"weapon_present": req.WeaponPresent, "victim_identified": req.VictimIdentified,
 		"days_to_report": req.DaysToReport, "part_1_2": req.Part12,
 	}
-	go h.guardarEnMongo("model3", resultado.NodoID, featureMap, resultado.Resultado, time.Since(inicio).Milliseconds())
+	duracion := time.Since(inicio).Milliseconds()
+	go h.guardarEnMongo("model3", resultado.NodoID, featureMap, resultado.Resultado, duracion)
+	if h.redis != nil {
+		go h.redis.CachearPrediccion("model3", features, resultado.Resultado)
+	}
+	go h.broadcastPrediccion("model3", resultado.NodoID, resultado.Resultado, resultado.DuracionMs, false)
 }
 
 // HealthCheck GET /health
@@ -248,12 +328,24 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	respOK(w, map[string]interface{}{
+	datos := map[string]interface{}{
 		"estado":             "OK",
 		"nodos":              nodos,
 		"total_pred_cluster": h.coord.TotalPredicciones(),
 		"total_pred_mongodb": total,
-	})
+	}
+
+	// Agregar stats de Redis si está disponible
+	if h.redis != nil {
+		datos["redis"] = h.redis.EstadisticasCache()
+	}
+
+	// Agregar stats de WebSocket
+	if h.hub != nil {
+		datos["websocket_clientes"] = h.hub.NumClientes()
+	}
+
+	respOK(w, datos)
 }
 
 // HistorialPredicciones GET /predictions?model=model1&limit=10
@@ -280,6 +372,19 @@ func (h *Handler) HistorialPredicciones(w http.ResponseWriter, r *http.Request) 
 		"total":     len(registros),
 		"registros": registros,
 	})
+}
+
+// EstadisticasCache GET /cache/stats
+func (h *Handler) EstadisticasCache(w http.ResponseWriter, r *http.Request) {
+	if h.redis == nil {
+		respOK(w, map[string]interface{}{
+			"estado":  "no_disponible",
+			"mensaje": "Redis no está configurado",
+		})
+		return
+	}
+
+	respOK(w, h.redis.EstadisticasCache())
 }
 
 // -- Middleware de logging --

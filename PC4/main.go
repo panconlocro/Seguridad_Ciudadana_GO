@@ -11,14 +11,18 @@ import (
 // ═══════════════════════════════════════════════════════
 // SecurityGO PC4 — Punto de entrada
 //
-// Extensión del sistema PC3 con:
-//   - Cluster distribuido de nodos ML (goroutines + channels)
-//   - API REST (net/http): 3 endpoints de predicción
+// Sistema distribuido con:
+//   - Cluster de nodos ML con comunicación TCP
+//   - API REST (net/http): endpoints de predicción
 //   - MongoDB: persistencia de predicciones
+//   - Redis: caché de predicciones precalculadas
+//   - WebSocket: datos en tiempo real
 //
 // Uso:
 //   go run . [--port 8080] [--mongo mongodb://localhost:27017]
-//             [--model1 models/model1.json] ...
+//            [--redis redis://localhost:6379]
+//            [--model1 models/model1.json] ...
+//            [--node-port1 9001] [--node-port2 9002] [--node-port3 9003]
 // ═══════════════════════════════════════════════════════
 
 func main() {
@@ -34,6 +38,8 @@ func main() {
 			cfg.Puerto = args[i+1]
 		case "--mongo":
 			cfg.MongoURI = args[i+1]
+		case "--redis":
+			cfg.RedisURI = args[i+1]
 		case "--model1":
 			cfg.RutaModel1 = args[i+1]
 		case "--model2":
@@ -42,6 +48,12 @@ func main() {
 			cfg.RutaModel3 = args[i+1]
 		case "--workers":
 			fmt.Sscanf(args[i+1], "%d", &cfg.WorkersPorNodo)
+		case "--node-port1":
+			cfg.PuertoNodo1 = args[i+1]
+		case "--node-port2":
+			cfg.PuertoNodo2 = args[i+1]
+		case "--node-port3":
+			cfg.PuertoNodo3 = args[i+1]
 		}
 	}
 
