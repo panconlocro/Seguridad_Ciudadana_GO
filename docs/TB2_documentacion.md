@@ -28,15 +28,23 @@ Este documento constituye el informe del **Entregable 3 (TB2)**, la consolidaci�
 | Componente | Tecnología | Justificación |
 | ---------- | ---------- | ------------- |
 | Framework | React (Vite) | Build ultra-rápido, HMR instantáneo |
-| Estilos | CSS Vanilla (Design Tokens) | Control total, tema oscuro con glassmorphism |
+| Estilos | CSS Vanilla (Design Tokens) | Tema "Vigía Nocturna" (Amber/Teal), Grid background |
 | Gráficos | Recharts | Integración nativa con React, SVG responsive |
 | Estado global | React Context API | Manejo de sesión JWT sin dependencias extra |
+
+### Diseño e Interfaz Gráfica ("Vigía Nocturna")
+
+Para el entregable final se rediseñó completamente la interfaz bajo el concepto **"Vigía Nocturna"**, emulando un centro de operaciones urbano de seguridad. Se implementó una identidad visual propia con:
+- **Paleta de colores:** Fondo oscuro (`--midnight`), acentos en ámbar (`--signal-amber`) para acciones y verde azulado (`--grid-teal`) para datos positivos.
+- **Tipografía:** *Space Grotesk* para títulos (display), *DM Sans* para el cuerpo y *JetBrains Mono* para datos técnicos.
+- **Layout:** *Top navigation bar* horizontal (reemplazando la antigua sidebar) para maximizar el espacio de formularios y gráficos.
+- **Detalles Visuales:** Animación sutil de *scan-line* y fondo de grilla urbana (radar), abandonando el glassmorphism genérico.
 
 ### Componentes implementados
 
 #### 2.1 Sistema de Autenticación (Login)
 
-El componente `Login.jsx` presenta una interfaz de autenticación con diseño glassmorphism. Tras ingresar credenciales válidas, se realiza una petición `POST /login` al backend Go, que retorna un **token JWT firmado con HS256**. Este token se almacena en `localStorage` y se adjunta automáticamente en todas las peticiones subsiguientes mediante el header `Authorization: Bearer <token>`.
+El componente `Login.jsx` presenta una interfaz de autenticación moderna, con el logo CSS integrado de SecurityGO y un layout limpio (con link toggle). Tras ingresar credenciales válidas, se realiza una petición `POST /login` al backend Go, que retorna un **token JWT firmado con HS256**. Este token se almacena en `localStorage` y se adjunta automáticamente en todas las peticiones subsiguientes mediante el header `Authorization: Bearer <token>`.
 
 El `AuthContext.jsx` gestiona el estado global de sesión (usuario, rol, token) y expone funciones `login()` y `logout()` para todos los componentes hijos.
 
@@ -63,22 +71,22 @@ El componente `AdminPanel.jsx` se conecta al endpoint WebSocket (`ws://localhost
 - **Métricas del cluster:** Cada 5 segundos, el Telemetry Heartbeat envía el estado de los nodos TCP (activos, predicciones acumuladas).
 
 Visualizaciones con Recharts:
-- **Gráfico de barras:** Predicciones acumuladas por nodo TCP
+- **Gráfico de barras:** Predicciones acumuladas por nodo TCP (adaptado a la nueva paleta amber/teal)
 - **Gráfico de pastel:** Ratio de Cache Hit/Miss de Redis
-- **Stream de eventos:** Lista en tiempo real con indicadores de cache y latencia
+- **Stream de eventos:** Lista en tiempo real con indicadores de cache (amber/teal) y latencia monospace
 
-Los KPIs se presentan en cards animadas: nodos activos, predicciones totales, registros en MongoDB, y clientes WebSocket conectados.
+Los KPIs se presentan en un *stat strip* horizontal unificado: nodos activos, predicciones totales, registros en MongoDB, y clientes WebSocket conectados.
 
 #### 2.4 Historial y Análisis de Impacto
 
 El componente `Historial.jsx` consulta el endpoint `GET /predictions` (alimentado por MongoDB) y presenta:
 
 - **Distribución por modelo:** Gráfico de barras con la cantidad de predicciones por modelo
-- **Timeline de actividad:** Gráfico de líneas mostrando predicciones agrupadas por hora
-- **Latencia promedio:** Métricas numéricas de rendimiento por modelo
-- **Tabla de registros:** Datos paginados con timestamp, modelo, nodo, duración y resultado
+- **Timeline de actividad:** Gráfico de líneas (amber) mostrando predicciones agrupadas por hora
+- **Latencia promedio:** *Stat strip* con métricas numéricas de rendimiento por modelo
+- **Tabla de registros:** Filas compactas con timestamp, modelo, nodo, duración y resultado (usando monospace para datos técnicos)
 
-Se incluyen filtros por modelo y límite de resultados.
+Se incluye una barra horizontal de filtros (*inline*) por modelo y límite de resultados.
 
 ---
 
