@@ -2,12 +2,23 @@ import { useState, useEffect } from 'react';
 import { obtenerHistorial } from '../api';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, LineChart, Line, Legend
+  ResponsiveContainer, LineChart, Line, Legend, Cell
 } from 'recharts';
 
 // ═══════════════════════════════════════════════════════
 // Historial — Registros de predicciones + gráficos
 // ═══════════════════════════════════════════════════════
+
+const CHART_COLORS = ['#E8A32E', '#2DD4A8', '#60A5FA'];
+
+const tooltipStyle = {
+  background: '#161B2E',
+  border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: '6px',
+  color: '#CBD5E1',
+  fontSize: '0.78rem',
+  fontFamily: "'DM Sans', sans-serif",
+};
 
 export default function Historial() {
   const [registros, setRegistros] = useState([]);
@@ -68,44 +79,44 @@ export default function Historial() {
     .map(([hora, count]) => ({ hora, predicciones: count }))
     .reverse();
 
-  const COLORS_BAR = ['#6366f1', '#06b6d4', '#22c55e'];
-
   return (
     <div className="fade-in">
       <div className="page-header">
-        <h1>📋 Historial de Predicciones</h1>
-        <p>Consulta las predicciones almacenadas en MongoDB y visualiza tendencias</p>
+        <h1>Historial de Predicciones</h1>
+        <p>Registros almacenados en MongoDB y tendencias de uso</p>
       </div>
 
-      {/* Filtros */}
-      <div className="glass-card" style={{
-        padding: 'var(--space-lg)',
-        marginBottom: 'var(--space-xl)',
+      {/* Filtros — inline bar */}
+      <div className="card" style={{
+        padding: 'var(--sp-4) var(--sp-5)',
+        marginBottom: 'var(--sp-8)',
         display: 'flex',
-        gap: 'var(--space-lg)',
-        alignItems: 'flex-end',
+        gap: 'var(--sp-5)',
+        alignItems: 'center',
         flexWrap: 'wrap',
       }}>
-        <div className="input-group" style={{ marginBottom: 0, minWidth: '180px' }}>
-          <label className="input-label">Filtrar por modelo</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+          <label className="input-label" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>Modelo</label>
           <select
             className="select-field"
             value={filtroModelo}
             onChange={(e) => setFiltroModelo(e.target.value)}
+            style={{ width: '200px' }}
           >
-            <option value="">Todos los modelos</option>
+            <option value="">Todos</option>
             <option value="model1">Model 1 — Tipo de Crimen</option>
             <option value="model2">Model 2 — Zona de Riesgo</option>
             <option value="model3">Model 3 — Prob. Arresto</option>
           </select>
         </div>
 
-        <div className="input-group" style={{ marginBottom: 0, minWidth: '120px' }}>
-          <label className="input-label">Límite</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
+          <label className="input-label" style={{ marginBottom: 0, whiteSpace: 'nowrap' }}>Límite</label>
           <select
             className="select-field"
             value={limite}
             onChange={(e) => setLimite(parseInt(e.target.value))}
+            style={{ width: '90px' }}
           >
             <option value={10}>10</option>
             <option value={25}>25</option>
@@ -114,16 +125,16 @@ export default function Historial() {
           </select>
         </div>
 
-        <button className="btn btn-ghost" onClick={fetchData}>
-          🔄 Actualizar
+        <button className="btn btn-ghost btn-sm" onClick={fetchData}>
+          ↻ Actualizar
         </button>
       </div>
 
       {/* Gráficos */}
-      <div className="grid-2" style={{ marginBottom: 'var(--space-xl)' }}>
+      <div className="grid-2" style={{ marginBottom: 'var(--sp-8)' }}>
         {/* Distribución por modelo */}
-        <div className="glass-card" style={{ padding: 'var(--space-lg)' }}>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: 'var(--space-lg)' }}>
+        <div className="card" style={{ padding: 'var(--sp-5)' }}>
+          <h3 className="section-title" style={{ marginBottom: 'var(--sp-5)' }}>
             Distribución por Modelo
           </h3>
           {chartModelos.length > 0 ? (
@@ -132,31 +143,24 @@ export default function Historial() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="modelo" />
                 <YAxis />
-                <Tooltip
-                  contentStyle={{
-                    background: '#111830',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '8px',
-                    color: '#e2e8f0',
-                  }}
-                />
-                <Bar dataKey="cantidad" radius={[6, 6, 0, 0]}>
+                <Tooltip contentStyle={tooltipStyle} />
+                <Bar dataKey="cantidad" radius={[4, 4, 0, 0]}>
                   {chartModelos.map((_, i) => (
-                    <Bar key={i} fill={COLORS_BAR[i % COLORS_BAR.length]} />
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div style={{ textAlign: 'center', color: 'var(--clr-text-dim)', padding: '2rem' }}>
-              Sin datos
+            <div className="empty-state" style={{ padding: 'var(--sp-8)' }}>
+              <p>Sin datos</p>
             </div>
           )}
         </div>
 
         {/* Timeline */}
-        <div className="glass-card" style={{ padding: 'var(--space-lg)' }}>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: 'var(--space-lg)' }}>
+        <div className="card" style={{ padding: 'var(--sp-5)' }}>
+          <h3 className="section-title" style={{ marginBottom: 'var(--sp-5)' }}>
             Actividad en el Tiempo
           </h3>
           {chartTimeline.length > 0 ? (
@@ -165,27 +169,21 @@ export default function Historial() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="hora" />
                 <YAxis />
-                <Tooltip
-                  contentStyle={{
-                    background: '#111830',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '8px',
-                    color: '#e2e8f0',
-                  }}
-                />
+                <Tooltip contentStyle={tooltipStyle} />
                 <Legend />
                 <Line
                   type="monotone"
                   dataKey="predicciones"
-                  stroke="#6366f1"
+                  stroke="#E8A32E"
                   strokeWidth={2}
-                  dot={{ fill: '#6366f1', r: 4 }}
+                  dot={{ fill: '#E8A32E', r: 3, strokeWidth: 0 }}
+                  activeDot={{ fill: '#E8A32E', r: 5, strokeWidth: 0 }}
                 />
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <div style={{ textAlign: 'center', color: 'var(--clr-text-dim)', padding: '2rem' }}>
-              Sin datos
+            <div className="empty-state" style={{ padding: 'var(--sp-8)' }}>
+              <p>Sin datos</p>
             </div>
           )}
         </div>
@@ -193,57 +191,43 @@ export default function Historial() {
 
       {/* Latencia promedio */}
       {chartLatencia.length > 0 && (
-        <div className="glass-card" style={{
-          padding: 'var(--space-lg)',
-          marginBottom: 'var(--space-xl)',
-        }}>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: 'var(--space-lg)' }}>
-            ⏱️ Latencia Promedio por Modelo (ms)
-          </h3>
-          <div className="grid-3">
-            {chartLatencia.map(d => (
-              <div key={d.modelo} style={{ textAlign: 'center' }}>
-                <div style={{
-                  fontSize: '2rem',
-                  fontWeight: 800,
-                  color: 'var(--clr-cyan)',
-                }}>{d.promedio_ms}<span style={{ fontSize: '0.9rem', fontWeight: 400 }}>ms</span></div>
-                <div style={{
-                  fontSize: '0.8rem',
-                  color: 'var(--clr-text-muted)',
-                  marginTop: 'var(--space-xs)',
-                }}>{d.modelo}</div>
-              </div>
-            ))}
-          </div>
+        <div className="card stat-strip" style={{ marginBottom: 'var(--sp-8)' }}>
+          {chartLatencia.map(d => (
+            <div className="stat-strip-item" key={d.modelo}>
+              <span className="stat-value" style={{ color: 'var(--grid-teal)' }}>
+                {d.promedio_ms}
+                <span style={{
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: '0.75rem',
+                  fontWeight: 400,
+                  color: 'var(--dim-silver)',
+                }}>ms</span>
+              </span>
+              <span className="stat-label">{d.modelo}</span>
+            </div>
+          ))}
         </div>
       )}
 
       {/* Tabla de registros */}
-      <div className="glass-card" style={{ padding: 'var(--space-lg)' }}>
-        <h3 style={{
-          fontSize: '0.95rem',
-          fontWeight: 700,
-          marginBottom: 'var(--space-md)',
+      <div className="card" style={{ padding: 'var(--sp-5)' }}>
+        <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
+          marginBottom: 'var(--sp-4)',
         }}>
-          Registros
+          <span className="section-title">Registros</span>
           <span className="badge badge-info">{registros.length} resultados</span>
-        </h3>
+        </div>
 
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 'var(--space-xl)' }}>
+          <div style={{ textAlign: 'center', padding: 'var(--sp-8)' }}>
             <span className="spinner" />
           </div>
         ) : registros.length === 0 ? (
-          <div style={{
-            textAlign: 'center',
-            color: 'var(--clr-text-dim)',
-            padding: 'var(--space-xl)',
-          }}>
-            No hay predicciones registradas aún.
+          <div className="empty-state">
+            <p>No hay predicciones registradas.</p>
           </div>
         ) : (
           <div style={{ overflow: 'auto' }}>
@@ -260,7 +244,11 @@ export default function Historial() {
               <tbody>
                 {registros.map((r, i) => (
                   <tr key={i}>
-                    <td style={{ fontSize: '0.8rem', fontFamily: 'var(--font-mono)' }}>
+                    <td style={{
+                      fontSize: '0.75rem',
+                      fontFamily: 'var(--font-mono)',
+                      color: 'var(--dim-silver)',
+                    }}>
                       {r.timestamp
                         ? new Date(r.timestamp).toLocaleString()
                         : '—'}
@@ -268,24 +256,31 @@ export default function Historial() {
                     <td>
                       <span className="badge badge-accent">{r.modelo}</span>
                     </td>
-                    <td style={{ fontSize: '0.8rem', color: 'var(--clr-text-muted)' }}>
+                    <td style={{
+                      fontSize: '0.75rem',
+                      fontFamily: 'var(--font-mono)',
+                      color: 'var(--dim-silver)',
+                    }}>
                       {r.nodo_worker || '—'}
                     </td>
                     <td>
                       <span style={{
-                        fontWeight: 600,
-                        color: (r.duracion_ms || 0) < 5 ? 'var(--clr-success)' : 'var(--clr-warning)',
+                        fontFamily: 'var(--font-mono)',
+                        fontWeight: 500,
+                        fontSize: '0.8rem',
+                        color: (r.duracion_ms || 0) < 5 ? 'var(--grid-teal)' : 'var(--signal-amber)',
                       }}>
                         {r.duracion_ms}ms
                       </span>
                     </td>
                     <td style={{
-                      fontSize: '0.78rem',
+                      fontSize: '0.72rem',
                       fontFamily: 'var(--font-mono)',
-                      maxWidth: '300px',
+                      maxWidth: '280px',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
+                      color: 'var(--dim-silver)',
                     }}>
                       {r.resultado ? JSON.stringify(r.resultado) : '—'}
                     </td>

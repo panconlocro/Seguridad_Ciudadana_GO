@@ -9,7 +9,16 @@ import {
 // Admin Panel — Métricas en tiempo real via WebSocket
 // ═══════════════════════════════════════════════════════
 
-const COLORS = ['#6366f1', '#06b6d4', '#22c55e', '#f59e0b', '#ef4444'];
+const CHART_COLORS = ['#E8A32E', '#2DD4A8', '#60A5FA', '#F4637D', '#A78BFA'];
+
+const tooltipStyle = {
+  background: '#161B2E',
+  border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: '6px',
+  color: '#CBD5E1',
+  fontSize: '0.78rem',
+  fontFamily: "'DM Sans', sans-serif",
+};
 
 export default function AdminPanel() {
   const [wsConectado, setWsConectado] = useState(false);
@@ -83,8 +92,8 @@ export default function AdminPanel() {
   return (
     <div className="fade-in">
       <div className="page-header">
-        <h1 style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-sm)' }}>
-          📊 Panel de Administración
+        <h1 style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
+          Panel de Administración
           <span className={`badge ${wsConectado ? 'badge-success' : 'badge-danger'}`}>
             {wsConectado ? (
               <><span className="pulse-dot" /> LIVE</>
@@ -94,46 +103,46 @@ export default function AdminPanel() {
         <p>Monitoreo en tiempo real del cluster TCP y bases de datos</p>
       </div>
 
-      {/* Stats top row */}
-      <div className="grid-4" style={{ marginBottom: 'var(--space-xl)' }}>
-        <div className="glass-card stat-card fade-in fade-in-delay-1">
-          <div className="stat-icon" style={{ background: 'var(--clr-accent-glow)' }}>🖥️</div>
-          <div className="stat-value">
+      {/* Stat strip — inline stats with dividers */}
+      <div className="card stat-strip fade-in" style={{ marginBottom: 'var(--sp-8)' }}>
+        <div className="stat-strip-item">
+          <span className="stat-icon">▣</span>
+          <span className="stat-value" style={{ color: 'var(--signal-amber)' }}>
             {metricas?.nodos?.filter(n => n.activo).length ?? '—'}
-          </div>
-          <div className="stat-label">Nodos activos</div>
+          </span>
+          <span className="stat-label">Nodos activos</span>
         </div>
 
-        <div className="glass-card stat-card fade-in fade-in-delay-2">
-          <div className="stat-icon" style={{ background: 'var(--clr-success-glow)' }}>📈</div>
-          <div className="stat-value">
+        <div className="stat-strip-item">
+          <span className="stat-icon">⬡</span>
+          <span className="stat-value" style={{ color: 'var(--grid-teal)' }}>
             {metricas?.predicciones_totales ?? health?.total_pred_cluster ?? '—'}
-          </div>
-          <div className="stat-label">Predicciones cluster</div>
+          </span>
+          <span className="stat-label">Predicciones cluster</span>
         </div>
 
-        <div className="glass-card stat-card fade-in fade-in-delay-3">
-          <div className="stat-icon" style={{ background: 'var(--clr-cyan-glow)' }}>💾</div>
-          <div className="stat-value">
+        <div className="stat-strip-item">
+          <span className="stat-icon">◈</span>
+          <span className="stat-value">
             {health?.total_pred_mongodb ?? '—'}
-          </div>
-          <div className="stat-label">Registros MongoDB</div>
+          </span>
+          <span className="stat-label">Registros MongoDB</span>
         </div>
 
-        <div className="glass-card stat-card fade-in fade-in-delay-4">
-          <div className="stat-icon" style={{ background: 'rgba(245, 158, 11, 0.15)' }}>🌐</div>
-          <div className="stat-value">
+        <div className="stat-strip-item">
+          <span className="stat-icon">◉</span>
+          <span className="stat-value" style={{ color: '#60A5FA' }}>
             {metricas?.clientes_ws ?? health?.websocket_clientes ?? '—'}
-          </div>
-          <div className="stat-label">Clientes WebSocket</div>
+          </span>
+          <span className="stat-label">Clientes WebSocket</span>
         </div>
       </div>
 
       {/* Charts */}
-      <div className="grid-2" style={{ marginBottom: 'var(--space-xl)' }}>
+      <div className="grid-2" style={{ marginBottom: 'var(--sp-8)' }}>
         {/* Predicciones por nodo */}
-        <div className="glass-card" style={{ padding: 'var(--space-lg)' }}>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: 'var(--space-lg)' }}>
+        <div className="card" style={{ padding: 'var(--sp-5)' }}>
+          <h3 className="section-title" style={{ marginBottom: 'var(--sp-5)' }}>
             Predicciones por Nodo TCP
           </h3>
           {chartNodos.length > 0 ? (
@@ -142,35 +151,28 @@ export default function AdminPanel() {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="nombre" />
                 <YAxis />
-                <Tooltip
-                  contentStyle={{
-                    background: '#111830',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: '8px',
-                    color: '#e2e8f0',
-                  }}
-                />
-                <Bar dataKey="predicciones" radius={[6, 6, 0, 0]}>
+                <Tooltip contentStyle={tooltipStyle} />
+                <Bar dataKey="predicciones" radius={[4, 4, 0, 0]}>
                   {chartNodos.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <div style={{ textAlign: 'center', color: 'var(--clr-text-dim)', padding: '2rem' }}>
-              Esperando datos del WebSocket...
+            <div className="empty-state" style={{ padding: 'var(--sp-8)' }}>
+              <p>Esperando datos del WebSocket...</p>
             </div>
           )}
         </div>
 
         {/* Cache hit/miss pie */}
-        <div className="glass-card" style={{ padding: 'var(--space-lg)' }}>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, marginBottom: 'var(--space-lg)' }}>
+        <div className="card" style={{ padding: 'var(--sp-5)' }}>
+          <h3 className="section-title" style={{ marginBottom: 'var(--sp-5)' }}>
             Efectividad del Caché Redis
           </h3>
           {cacheStats && (cacheStats.hits > 0 || cacheStats.misses > 0) ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-6)' }}>
               <ResponsiveContainer width="50%" height={200}>
                 <PieChart>
                   <Pie
@@ -178,52 +180,58 @@ export default function AdminPanel() {
                     cx="50%"
                     cy="50%"
                     innerRadius={50}
-                    outerRadius={80}
+                    outerRadius={75}
                     dataKey="value"
+                    strokeWidth={0}
                   >
-                    <Cell fill="#22c55e" />
-                    <Cell fill="#ef4444" />
+                    <Cell fill="#2DD4A8" />
+                    <Cell fill="#F4637D" />
                   </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      background: '#111830',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '8px',
-                      color: '#e2e8f0',
-                    }}
-                  />
+                  <Tooltip contentStyle={tooltipStyle} />
                 </PieChart>
               </ResponsiveContainer>
               <div>
-                <div style={{ marginBottom: 'var(--space-md)' }}>
+                <div style={{ marginBottom: 'var(--sp-4)' }}>
                   <span className="badge badge-success">● HITS</span>
-                  <span style={{ fontSize: '1.5rem', fontWeight: 800, marginLeft: 'var(--space-sm)' }}>
+                  <span style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: '1.4rem',
+                    fontWeight: 700,
+                    marginLeft: 'var(--sp-3)',
+                  }}>
                     {cacheStats.hits}
                   </span>
                 </div>
-                <div style={{ marginBottom: 'var(--space-md)' }}>
+                <div style={{ marginBottom: 'var(--sp-4)' }}>
                   <span className="badge badge-danger">● MISSES</span>
-                  <span style={{ fontSize: '1.5rem', fontWeight: 800, marginLeft: 'var(--space-sm)' }}>
+                  <span style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: '1.4rem',
+                    fontWeight: 700,
+                    marginLeft: 'var(--sp-3)',
+                  }}>
                     {cacheStats.misses}
                   </span>
                 </div>
                 <div>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--clr-text-muted)' }}>Hit Rate:</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--dim-silver)' }}>Hit Rate:</span>
                   <span style={{
-                    fontSize: '1.1rem',
+                    fontFamily: 'var(--font-display)',
+                    fontSize: '1rem',
                     fontWeight: 700,
-                    marginLeft: 'var(--space-sm)',
-                    color: 'var(--clr-success)',
+                    marginLeft: 'var(--sp-2)',
+                    color: 'var(--grid-teal)',
                   }}>
                     {cacheStats.hit_rate}
                   </span>
                 </div>
-                <div style={{ marginTop: 'var(--space-sm)' }}>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--clr-text-muted)' }}>Keys en Redis:</span>
+                <div style={{ marginTop: 'var(--sp-2)' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--dim-silver)' }}>Keys Redis:</span>
                   <span style={{
-                    fontSize: '1rem',
-                    fontWeight: 600,
-                    marginLeft: 'var(--space-sm)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '0.85rem',
+                    fontWeight: 500,
+                    marginLeft: 'var(--sp-2)',
                   }}>
                     {cacheStats.keys_total}
                   </span>
@@ -231,60 +239,61 @@ export default function AdminPanel() {
               </div>
             </div>
           ) : (
-            <div style={{ textAlign: 'center', color: 'var(--clr-text-dim)', padding: '2rem' }}>
-              {cacheStats?.estado === 'no_disponible'
-                ? '⚠️ Redis no está disponible'
-                : 'Sin datos de caché aún. Ejecuta predicciones.'}
+            <div className="empty-state" style={{ padding: 'var(--sp-8)' }}>
+              <p>
+                {cacheStats?.estado === 'no_disponible'
+                  ? 'Redis no disponible'
+                  : 'Sin datos de caché. Ejecuta predicciones para generar datos.'}
+              </p>
             </div>
           )}
         </div>
       </div>
 
       {/* Event stream */}
-      <div className="glass-card" style={{ padding: 'var(--space-lg)' }}>
-        <h3 style={{
-          fontSize: '0.95rem',
-          fontWeight: 700,
-          marginBottom: 'var(--space-md)',
+      <div className="card" style={{ padding: 'var(--sp-5)' }}>
+        <h3 className="section-title" style={{
+          marginBottom: 'var(--sp-4)',
           display: 'flex',
           alignItems: 'center',
-          gap: 'var(--space-sm)',
+          gap: 'var(--sp-3)',
         }}>
           <span className="pulse-dot" /> Eventos en Tiempo Real
-          <span style={{ fontSize: '0.75rem', color: 'var(--clr-text-dim)', fontWeight: 400 }}>
-            (vía WebSocket)
+          <span style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: '0.68rem',
+            color: 'var(--faint-silver)',
+            fontWeight: 400,
+          }}>
+            vía WebSocket
           </span>
         </h3>
 
         {eventos.length === 0 ? (
-          <div style={{
-            textAlign: 'center',
-            color: 'var(--clr-text-dim)',
-            padding: 'var(--space-xl)',
-          }}>
-            Esperando eventos... Las predicciones aparecerán aquí en tiempo real.
+          <div className="empty-state" style={{ padding: 'var(--sp-6)' }}>
+            <p>Esperando eventos... Las predicciones aparecerán aquí en tiempo real.</p>
           </div>
         ) : (
-          <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+          <div style={{ maxHeight: '380px', overflow: 'auto' }}>
             {eventos.map((ev, i) => (
               <div className="event-item" key={ev._ts + '-' + i}>
                 <div
                   className="event-dot"
                   style={{
-                    background: ev.desde_cache ? 'var(--clr-warning)' : 'var(--clr-success)',
+                    background: ev.desde_cache ? 'var(--signal-amber)' : 'var(--grid-teal)',
                   }}
                 />
                 <div className="event-body">
                   <div className="event-title">
                     {ev.modelo}
                     {ev.desde_cache && (
-                      <span className="badge badge-warning" style={{ marginLeft: 'var(--space-sm)' }}>
+                      <span className="badge badge-warning" style={{ marginLeft: 'var(--sp-2)' }}>
                         CACHE
                       </span>
                     )}
                   </div>
                   <div className="event-meta">
-                    {ev.nodo && `Nodo: ${ev.nodo}`}
+                    {ev.nodo && `${ev.nodo}`}
                     {ev.duracion_ms !== undefined && ` · ${ev.duracion_ms}ms`}
                     {ev.timestamp && ` · ${new Date(ev.timestamp).toLocaleTimeString()}`}
                   </div>

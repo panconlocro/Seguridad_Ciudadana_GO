@@ -22,8 +22,10 @@ function AppContent() {
         alignItems: 'center',
         justifyContent: 'center',
         minHeight: '100vh',
-        gap: '1rem',
-        color: 'var(--clr-text-muted)',
+        gap: '0.75rem',
+        color: 'var(--dim-silver)',
+        fontFamily: 'var(--font-body)',
+        fontSize: '0.875rem',
       }}>
         <span className="spinner" />
         Cargando SecurityGO...

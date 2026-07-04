@@ -9,33 +9,31 @@ const MODELOS = [
   {
     id: 'crime-type',
     nombre: 'Tipo de Crimen',
-    icon: '🔍',
-    color: 'var(--clr-accent)',
-    descripcion: 'Clasifica el tipo de crimen basado en las variables de contexto',
+    icon: '◎',
+    descripcion: 'Clasifica el tipo de crimen según contexto',
     campos: [
       { key: 'hour', label: 'Hora (0-23)', tipo: 'number', min: 0, max: 23 },
-      { key: 'day_of_week', label: 'Día de semana (0-6)', tipo: 'number', min: 0, max: 6 },
+      { key: 'day_of_week', label: 'Día semana (0-6)', tipo: 'number', min: 0, max: 6 },
       { key: 'month', label: 'Mes (1-12)', tipo: 'number', min: 1, max: 12 },
       { key: 'area', label: 'Área (código)', tipo: 'number', min: 1, max: 21 },
-      { key: 'premis_cd', label: 'Tipo de premisa', tipo: 'number', min: 100, max: 999 },
+      { key: 'premis_cd', label: 'Premisa', tipo: 'number', min: 100, max: 999 },
       { key: 'part_1_2', label: 'Parte 1/2', tipo: 'number', min: 1, max: 2 },
-      { key: 'victim_identified', label: 'Víctima identificada (0/1)', tipo: 'number', min: 0, max: 1 },
-      { key: 'days_to_report', label: 'Días para reportar', tipo: 'number', min: 0, max: 365 },
+      { key: 'victim_identified', label: 'Víctima ID (0/1)', tipo: 'number', min: 0, max: 1 },
+      { key: 'days_to_report', label: 'Días reporte', tipo: 'number', min: 0, max: 365 },
     ],
     apiCall: predecirTipoCrimen,
   },
   {
     id: 'risk-zone',
     nombre: 'Zona de Riesgo',
-    icon: '📍',
-    color: 'var(--clr-warning)',
-    descripcion: 'Predice coordenadas de la zona de riesgo asociada',
+    icon: '△',
+    descripcion: 'Predice coordenadas de zona de riesgo',
     campos: [
       { key: 'hour', label: 'Hora (0-23)', tipo: 'number', min: 0, max: 23 },
-      { key: 'day_of_week', label: 'Día de semana (0-6)', tipo: 'number', min: 0, max: 6 },
+      { key: 'day_of_week', label: 'Día semana (0-6)', tipo: 'number', min: 0, max: 6 },
       { key: 'month', label: 'Mes (1-12)', tipo: 'number', min: 1, max: 12 },
-      { key: 'crm_cd', label: 'Código de crimen', tipo: 'number', min: 100, max: 999 },
-      { key: 'premis_cd', label: 'Tipo de premisa', tipo: 'number', min: 100, max: 999 },
+      { key: 'crm_cd', label: 'Código crimen', tipo: 'number', min: 100, max: 999 },
+      { key: 'premis_cd', label: 'Premisa', tipo: 'number', min: 100, max: 999 },
       { key: 'part_1_2', label: 'Parte 1/2', tipo: 'number', min: 1, max: 2 },
       { key: 'area', label: 'Área (código)', tipo: 'number', min: 1, max: 21 },
     ],
@@ -43,19 +41,18 @@ const MODELOS = [
   },
   {
     id: 'arrest-prob',
-    nombre: 'Probabilidad de Arresto',
-    icon: '⚖️',
-    color: 'var(--clr-success)',
-    descripcion: 'Estima la probabilidad de que el caso resulte en arresto',
+    nombre: 'Prob. Arresto',
+    icon: '⚖',
+    descripcion: 'Estima la probabilidad de arresto',
     campos: [
-      { key: 'crm_cd', label: 'Código de crimen', tipo: 'number', min: 100, max: 999 },
+      { key: 'crm_cd', label: 'Código crimen', tipo: 'number', min: 100, max: 999 },
       { key: 'area', label: 'Área (código)', tipo: 'number', min: 1, max: 21 },
       { key: 'hour', label: 'Hora (0-23)', tipo: 'number', min: 0, max: 23 },
-      { key: 'day_of_week', label: 'Día de semana (0-6)', tipo: 'number', min: 0, max: 6 },
-      { key: 'premis_cd', label: 'Tipo de premisa', tipo: 'number', min: 100, max: 999 },
-      { key: 'weapon_present', label: 'Arma presente (0/1)', tipo: 'number', min: 0, max: 1 },
-      { key: 'victim_identified', label: 'Víctima identificada (0/1)', tipo: 'number', min: 0, max: 1 },
-      { key: 'days_to_report', label: 'Días para reportar', tipo: 'number', min: 0, max: 365 },
+      { key: 'day_of_week', label: 'Día semana (0-6)', tipo: 'number', min: 0, max: 6 },
+      { key: 'premis_cd', label: 'Premisa', tipo: 'number', min: 100, max: 999 },
+      { key: 'weapon_present', label: 'Arma (0/1)', tipo: 'number', min: 0, max: 1 },
+      { key: 'victim_identified', label: 'Víctima ID (0/1)', tipo: 'number', min: 0, max: 1 },
+      { key: 'days_to_report', label: 'Días reporte', tipo: 'number', min: 0, max: 365 },
       { key: 'part_1_2', label: 'Parte 1/2', tipo: 'number', min: 1, max: 2 },
     ],
     apiCall: predecirProbArresto,
@@ -107,61 +104,45 @@ export default function Predicciones() {
   return (
     <div className="fade-in">
       <div className="page-header">
-        <h1>🎯 Predicciones ML</h1>
-        <p>Consulta los modelos de Machine Learning del cluster distribuido</p>
+        <h1>Predicciones ML</h1>
+        <p>Consulta los modelos del cluster TCP distribuido</p>
       </div>
 
-      {/* Selector de modelo */}
-      <div className="grid-3" style={{ marginBottom: 'var(--space-xl)' }}>
+      {/* Pill tabs para selector de modelo */}
+      <div className="pill-tabs" style={{ marginBottom: 'var(--sp-8)' }}>
         {MODELOS.map((m, i) => (
           <button
             key={m.id}
-            className={`glass-card stat-card`}
+            className={`pill-tab ${modeloActivo === i ? 'active' : ''}`}
             onClick={() => switchModelo(i)}
-            style={{
-              cursor: 'pointer',
-              border: modeloActivo === i
-                ? `2px solid ${m.color}`
-                : '1px solid var(--clr-border)',
-              textAlign: 'left',
-              background: modeloActivo === i ? 'var(--clr-bg-card-hover)' : undefined,
-            }}
           >
-            <div style={{ fontSize: '1.8rem', marginBottom: 'var(--space-sm)' }}>{m.icon}</div>
-            <div style={{
-              fontSize: '1rem',
-              fontWeight: 700,
-              marginBottom: 'var(--space-xs)',
-            }}>{m.nombre}</div>
-            <div style={{
-              fontSize: '0.78rem',
-              color: 'var(--clr-text-dim)',
-              lineHeight: 1.4,
-            }}>{m.descripcion}</div>
+            <span>{m.icon}</span>
+            {m.nombre}
           </button>
         ))}
       </div>
 
-      {/* Formulario del modelo activo */}
-      <div className="grid-2">
-        <div className="glass-card fade-in" style={{ padding: 'var(--space-xl)' }}>
-          <h2 style={{
-            fontSize: '1.1rem',
-            fontWeight: 700,
-            marginBottom: 'var(--space-lg)',
+      {/* Formulario + resultado */}
+      <div className="grid-asym">
+        {/* Formulario */}
+        <div className="card fade-in" style={{ padding: 'var(--sp-6)' }}>
+          <div style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 'var(--space-sm)',
+            gap: 'var(--sp-3)',
+            marginBottom: 'var(--sp-6)',
           }}>
-            <span>{modelo.icon}</span>
-            {modelo.nombre}
-          </h2>
+            <span className="section-title">{modelo.icon} {modelo.nombre}</span>
+            <span style={{ fontSize: '0.78rem', color: 'var(--faint-silver)' }}>
+              — {modelo.descripcion}
+            </span>
+          </div>
 
           <form onSubmit={handleSubmit}>
             <div style={{
               display: 'grid',
               gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: 'var(--space-md)',
+              gap: 'var(--sp-4)',
             }}>
               {modelo.campos.map(campo => (
                 <div className="input-group" key={campo.key} style={{ marginBottom: 0 }}>
@@ -183,7 +164,7 @@ export default function Predicciones() {
             </div>
 
             {error && (
-              <div className="login-error" style={{ marginTop: 'var(--space-md)' }}>
+              <div className="login-error" style={{ marginTop: 'var(--sp-4)' }}>
                 {error}
               </div>
             )}
@@ -192,12 +173,12 @@ export default function Predicciones() {
               type="submit"
               className="btn btn-primary btn-lg"
               disabled={loading}
-              style={{ width: '100%', marginTop: 'var(--space-lg)' }}
+              style={{ width: '100%', marginTop: 'var(--sp-6)' }}
             >
               {loading ? (
                 <><span className="spinner" /> Procesando en cluster TCP...</>
               ) : (
-                'Ejecutar Predicción'
+                'Ejecutar predicción'
               )}
             </button>
           </form>
@@ -206,21 +187,19 @@ export default function Predicciones() {
         {/* Resultado */}
         <div>
           {resultado ? (
-            <div className="glass-card result-card fade-in">
+            <div className="card result-card fade-in">
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
               }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>
-                  Resultado de Predicción
-                </h3>
+                <span className="section-title">Resultado</span>
                 <span className={`badge ${resultado.desde_cache ? 'badge-warning' : 'badge-success'}`}>
-                  {resultado.desde_cache ? '⚡ CACHE' : '🖥️ TCP CLUSTER'}
+                  {resultado.desde_cache ? '⚡ CACHE' : '● CLUSTER'}
                 </span>
               </div>
 
-              <div className="result-value" style={{ color: modelo.color }}>
+              <div className="result-value">
                 {resultado.prediccion
                   ? typeof resultado.prediccion === 'object'
                     ? JSON.stringify(resultado.prediccion, null, 2)
@@ -229,45 +208,43 @@ export default function Predicciones() {
               </div>
 
               <div className="result-meta">
-                <span>⏱️ {resultado.duracion_ms}ms</span>
-                <span>📦 {resultado.modelo}</span>
+                <span>⏱ {resultado.duracion_ms}ms</span>
+                <span>⬡ {resultado.modelo}</span>
                 {resultado.nodo_worker && (
-                  <span>🖧 {resultado.nodo_worker}</span>
+                  <span>⊞ {resultado.nodo_worker}</span>
                 )}
               </div>
 
-              {/* Detalles JSON */}
-              <details style={{ marginTop: 'var(--space-lg)' }}>
+              {/* JSON raw */}
+              <details style={{ marginTop: 'var(--sp-6)' }}>
                 <summary style={{
                   cursor: 'pointer',
-                  fontSize: '0.8rem',
-                  color: 'var(--clr-text-dim)',
-                }}>Ver respuesta completa (JSON)</summary>
+                  fontSize: '0.75rem',
+                  color: 'var(--faint-silver)',
+                  fontFamily: 'var(--font-mono)',
+                }}>ver respuesta completa</summary>
                 <pre style={{
-                  marginTop: 'var(--space-sm)',
-                  padding: 'var(--space-md)',
-                  background: 'var(--clr-bg-input)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.78rem',
+                  marginTop: 'var(--sp-3)',
+                  padding: 'var(--sp-4)',
+                  background: 'var(--surface-input)',
+                  borderRadius: 'var(--radius-md)',
+                  fontSize: '0.72rem',
                   fontFamily: 'var(--font-mono)',
                   overflow: 'auto',
-                  maxHeight: '300px',
-                  color: 'var(--clr-cyan)',
+                  maxHeight: '280px',
+                  color: 'var(--grid-teal)',
+                  lineHeight: 1.5,
                 }}>
                   {JSON.stringify(resultado, null, 2)}
                 </pre>
               </details>
             </div>
           ) : (
-            <div className="glass-card" style={{
-              padding: 'var(--space-2xl)',
-              textAlign: 'center',
-              color: 'var(--clr-text-dim)',
-            }}>
-              <div style={{ fontSize: '3rem', marginBottom: 'var(--space-md)' }}>🧠</div>
+            <div className="card empty-state">
+              <div className="empty-state-icon">◎</div>
               <p>Completa el formulario y ejecuta una predicción.</p>
-              <p style={{ fontSize: '0.8rem', marginTop: 'var(--space-sm)' }}>
-                Los resultados aparecerán aquí con detalles del nodo que los procesó.
+              <p style={{ fontSize: '0.75rem', marginTop: 'var(--sp-2)', color: 'var(--faint-silver)' }}>
+                Los resultados incluyen el nodo que procesó la solicitud.
               </p>
             </div>
           )}
