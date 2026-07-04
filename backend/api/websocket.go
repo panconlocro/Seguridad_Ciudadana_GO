@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"securitygo_pc4/cluster"
+	"securitygo_backend/cluster"
 )
 
 // ═══════════════════════════════════════════════════════
