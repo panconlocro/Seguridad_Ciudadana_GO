@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // ═══════════════════════════════════════════════════════
@@ -22,20 +23,10 @@ var jwtSecretKey = []byte("securitygo-2026-secretkey-pc4-tb2")
 // Duración del token: 24 horas
 const tokenDuracion = 24 * time.Hour
 
-// UsuarioCredenciales representa las credenciales de login
+// UsuarioCredenciales representa las credenciales de login/registro
 type UsuarioCredenciales struct {
 	Usuario  string `json:"usuario"`
 	Password string `json:"password"`
-}
-
-// Usuarios estáticos (en producción se consultaría MongoDB)
-var usuariosValidos = map[string]struct {
-	Password string
-	Rol      string
-}{
-	"admin": {Password: "admin123", Rol: "admin"},
-	"user":  {Password: "user123", Rol: "user"},
-	"rosa":  {Password: "seguridad2026", Rol: "admin"},
 }
 
 // ClaimsJWT extiende los claims estándar con campos personalizados
@@ -45,7 +36,47 @@ type ClaimsJWT struct {
 	jwt.RegisteredClaims
 }
 
-// Login POST /login — autentica y retorna un token JWT
+// Register POST /register — crea un nuevo usuario
+func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		respError(w, http.StatusMethodNotAllowed, "usar POST")
+		return
+	}
+
+	var creds UsuarioCredenciales
+	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+		respError(w, http.StatusBadRequest, fmt.Sprintf("JSON inválido: %v", err))
+		return
+	}
+
+	if len(creds.Usuario) < 3 || len(creds.Password) < 6 {
+		respError(w, http.StatusBadRequest, "usuario min 3 chars, password min 6 chars")
+		return
+	}
+
+	// Encriptar contraseña
+	hash, err := bcrypt.GenerateFromPassword([]byte(creds.Password), bcrypt.DefaultCost)
+	if err != nil {
+		respError(w, http.StatusInternalServerError, "error procesando contraseña")
+		return
+	}
+
+	// Guardar en BD con rol "user" por defecto
+	err = h.mongo.CrearUsuario(creds.Usuario, string(hash), "user")
+	if err != nil {
+		if strings.Contains(err.Error(), "ya existe") {
+			respError(w, http.StatusConflict, "el usuario ya existe")
+		} else {
+			respError(w, http.StatusInternalServerError, "error en base de datos")
+			log.Printf("[Auth] Error en registro: %v\n", err)
+		}
+		return
+	}
+
+	respOK(w, map[string]string{"mensaje": "usuario creado exitosamente"})
+}
+
+// Login POST /login — autentica consultando MongoDB y retorna un token JWT
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		respError(w, http.StatusMethodNotAllowed, "usar POST")
@@ -58,9 +89,19 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validar credenciales
-	usuario, existe := usuariosValidos[creds.Usuario]
-	if !existe || usuario.Password != creds.Password {
+	// Buscar en BD
+	usuario, err := h.mongo.ObtenerUsuarioPorNombre(creds.Usuario)
+	if err != nil {
+		respError(w, http.StatusInternalServerError, "error de base de datos")
+		return
+	}
+	if usuario == nil {
+		respError(w, http.StatusUnauthorized, "credenciales inválidas")
+		return
+	}
+
+	// Comparar hash
+	if err := bcrypt.CompareHashAndPassword([]byte(usuario.PasswordHash), []byte(creds.Password)); err != nil {
 		respError(w, http.StatusUnauthorized, "credenciales inválidas")
 		return
 	}
@@ -68,7 +109,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Generar token JWT
 	ahora := time.Now()
 	claims := ClaimsJWT{
-		Usuario: creds.Usuario,
+		Usuario: usuario.Usuario,
 		Rol:     usuario.Rol,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(ahora.Add(tokenDuracion)),
@@ -85,11 +126,11 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[Auth] ✔ Login exitoso: %s (rol: %s)\n", creds.Usuario, usuario.Rol)
+	log.Printf("[Auth] ✔ Login exitoso: %s (rol: %s)\n", usuario.Usuario, usuario.Rol)
 
 	respOK(w, map[string]interface{}{
 		"token":   tokenStr,
-		"usuario": creds.Usuario,
+		"usuario": usuario.Usuario,
 		"rol":     usuario.Rol,
 		"expira":  ahora.Add(tokenDuracion).UTC().Format(time.RFC3339),
 	})

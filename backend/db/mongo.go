@@ -149,3 +149,79 @@ func (c *ClienteMongo) ContarPredicciones() (int64, error) {
 	col := c.db.Collection(ColeccionPred)
 	return col.CountDocuments(ctx, bson.M{})
 }
+
+// ═══════════════════════════════════════════════════════
+// AUTENTICACIÓN — Manejo de Usuarios en MongoDB
+// ═══════════════════════════════════════════════════════
+
+const ColeccionUsuarios = "usuarios"
+
+// RegistroUsuario representa a un usuario en la BD
+type RegistroUsuario struct {
+	ID           string    `bson:"_id,omitempty"`
+	Usuario      string    `bson:"usuario"`
+	PasswordHash string    `bson:"password_hash"`
+	Rol          string    `bson:"rol"`
+	CreadoEn     time.Time `bson:"creado_en"`
+}
+
+// CrearUsuario inserta un nuevo usuario en la base de datos
+func (c *ClienteMongo) CrearUsuario(usuario, passwordHash, rol string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Verificar si el usuario ya existe
+	col := c.db.Collection(ColeccionUsuarios)
+	count, err := col.CountDocuments(ctx, bson.M{"usuario": usuario})
+	if err != nil {
+		return fmt.Errorf("error comprobando existencia: %w", err)
+	}
+	if count > 0 {
+		return fmt.Errorf("el usuario '%s' ya existe", usuario)
+	}
+
+	reg := RegistroUsuario{
+		Usuario:      usuario,
+		PasswordHash: passwordHash,
+		Rol:          rol,
+		CreadoEn:     time.Now().UTC(),
+	}
+
+	_, err = col.InsertOne(ctx, reg)
+	if err != nil {
+		return fmt.Errorf("error insertando usuario: %w", err)
+	}
+	
+	log.Printf("[MongoDB] ✔ Nuevo usuario creado: %s (rol: %s)\n", usuario, rol)
+	return nil
+}
+
+// ObtenerUsuarioPorNombre busca un usuario por su nombre exacto
+func (c *ClienteMongo) ObtenerUsuarioPorNombre(usuario string) (*RegistroUsuario, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := c.db.Collection(ColeccionUsuarios)
+	var reg RegistroUsuario
+	err := col.FindOne(ctx, bson.M{"usuario": usuario}).Decode(&reg)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, nil // No existe
+		}
+		return nil, fmt.Errorf("error buscando usuario: %w", err)
+	}
+	return &reg, nil
+}
+
+// InicializarAdmin verifica si hay algún admin; si no lo hay, crea uno por defecto.
+func (c *ClienteMongo) InicializarAdmin(hash string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	col := c.db.Collection(ColeccionUsuarios)
+	count, _ := col.CountDocuments(ctx, bson.M{"rol": "admin"})
+	if count == 0 {
+		log.Println("[MongoDB] No se detectó administrador. Creando admin por defecto...")
+		_ = c.CrearUsuario("admin", hash, "admin")
+	}
+}

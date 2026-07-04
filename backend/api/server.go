@@ -12,6 +12,8 @@ import (
 
 	"securitygo_backend/cluster"
 	"securitygo_backend/db"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // ═══════════════════════════════════════════════════════
@@ -70,6 +72,10 @@ func IniciarServidor(cfg ConfigServidor) error {
 	}
 	defer mongo.Cerrar()
 	mongo.GuardarLog("INFO", "servidor", "SecurityGO PC4 iniciado")
+
+	// Inicializar usuario admin por defecto si no hay ninguno
+	hashAdmin, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	mongo.InicializarAdmin(string(hashAdmin))
 
 	// ── 2. Conectar Redis (modo degradado si no disponible) ──
 	log.Println("[Init] Conectando a Redis...")
@@ -134,6 +140,7 @@ func IniciarServidor(cfg ConfigServidor) error {
 
 	// Rutas públicas (sin JWT)
 	mux.HandleFunc("/login", handler.Login)
+	mux.HandleFunc("/register", handler.Register)
 	mux.HandleFunc("/health", handler.HealthCheck)
 	mux.HandleFunc("/ws", hub.HandleWS)
 
@@ -168,6 +175,8 @@ func IniciarServidor(cfg ConfigServidor) error {
 	go func() {
 		fmt.Printf("\n[Servidor] ✔ Escuchando en http://localhost:%s\n\n", cfg.Puerto)
 		fmt.Println("  Endpoints disponibles:")
+		fmt.Printf("  POST http://localhost:%s/login\n", cfg.Puerto)
+		fmt.Printf("  POST http://localhost:%s/register\n", cfg.Puerto)
 		fmt.Printf("  POST http://localhost:%s/predict/crime-type\n", cfg.Puerto)
 		fmt.Printf("  POST http://localhost:%s/predict/risk-zone\n", cfg.Puerto)
 		fmt.Printf("  POST http://localhost:%s/predict/arrest-prob\n", cfg.Puerto)

@@ -42,6 +42,13 @@ export async function login(usuario, password) {
   });
 }
 
+export async function registrarUsuario(usuario, password) {
+  return apiFetch('/register', {
+    method: 'POST',
+    body: JSON.stringify({ usuario, password }),
+  });
+}
+
 // ── Predicciones ──
 export async function predecirTipoCrimen(features) {
   return apiFetch('/predict/crime-type', {
