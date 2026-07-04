@@ -131,13 +131,26 @@ func IniciarServidor(cfg ConfigServidor) error {
 	// ── 6. Registrar rutas ──
 	handler := NuevoHandler(coord, mongo, redisClient, hub)
 	mux := http.NewServeMux()
-	mux.HandleFunc("/predict/crime-type", handler.PredecirTipoCrimen)
-	mux.HandleFunc("/predict/risk-zone", handler.PredecirZonaRiesgo)
-	mux.HandleFunc("/predict/arrest-prob", handler.PredecirProbArresto)
+
+	// Rutas públicas (sin JWT)
+	mux.HandleFunc("/login", handler.Login)
 	mux.HandleFunc("/health", handler.HealthCheck)
-	mux.HandleFunc("/predictions", handler.HistorialPredicciones)
-	mux.HandleFunc("/cache/stats", handler.EstadisticasCache)
 	mux.HandleFunc("/ws", hub.HandleWS)
+
+	// Rutas protegidas con JWT
+	protegido := http.NewServeMux()
+	protegido.HandleFunc("/predict/crime-type", handler.PredecirTipoCrimen)
+	protegido.HandleFunc("/predict/risk-zone", handler.PredecirZonaRiesgo)
+	protegido.HandleFunc("/predict/arrest-prob", handler.PredecirProbArresto)
+	protegido.HandleFunc("/predictions", handler.HistorialPredicciones)
+	protegido.HandleFunc("/cache/stats", handler.EstadisticasCache)
+	mux.Handle("/predict/", JWTMiddleware(protegido))
+	mux.Handle("/predictions", JWTMiddleware(protegido))
+	mux.Handle("/cache/", JWTMiddleware(protegido))
+
+	// Servir frontend estático (SPA)
+	fs := http.FileServer(http.Dir("../frontend/dist"))
+	mux.Handle("/app/", http.StripPrefix("/app/", fs))
 
 	http.Handle("/", CORSMiddleware(LoggingMiddleware(mux)))
 
