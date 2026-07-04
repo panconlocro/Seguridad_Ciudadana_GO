@@ -25,21 +25,21 @@ const (
 
 // RegistroPrediccion representa un documento en MongoDB
 type RegistroPrediccion struct {
-	ID         string                 `bson:"_id,omitempty"`
-	Timestamp  time.Time              `bson:"timestamp"`
-	Modelo     string                 `bson:"modelo"`      // "model1", "model2", "model3"
-	NodoWorker string                 `bson:"nodo_worker"` // ID del nodo que respondió
-	Features   map[string]interface{} `bson:"features"`    // inputs del usuario
-	Resultado  map[string]interface{} `bson:"resultado"`   // predicción devuelta
-	DuracionMs int64                  `bson:"duracion_ms"` // tiempo de inferencia
+	ID         string                 `bson:"_id,omitempty" json:"id,omitempty"`
+	Timestamp  time.Time              `bson:"timestamp" json:"timestamp"`
+	Modelo     string                 `bson:"modelo" json:"modelo"`      // "model1", "model2", "model3"
+	NodoWorker string                 `bson:"nodo_worker" json:"nodo_worker"` // ID del nodo que respondió
+	Features   map[string]interface{} `bson:"features" json:"features"`    // inputs del usuario
+	Resultado  map[string]interface{} `bson:"resultado" json:"resultado"`   // predicción devuelta
+	DuracionMs int64                  `bson:"duracion_ms" json:"duracion_ms"` // tiempo de inferencia
 }
 
 // RegistroLog representa un evento del cluster
 type RegistroLog struct {
-	Timestamp time.Time `bson:"timestamp"`
-	Nivel     string    `bson:"nivel"` // "INFO", "ERROR", "WARN"
-	Nodo      string    `bson:"nodo"`
-	Mensaje   string    `bson:"mensaje"`
+	Timestamp time.Time `bson:"timestamp" json:"timestamp"`
+	Nivel     string    `bson:"nivel" json:"nivel"` // "INFO", "ERROR", "WARN"
+	Nodo      string    `bson:"nodo" json:"nodo"`
+	Mensaje   string    `bson:"mensaje" json:"mensaje"`
 }
 
 // ClienteMongo encapsula la conexión y operaciones
