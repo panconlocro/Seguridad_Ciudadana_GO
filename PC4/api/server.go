@@ -1,0 +1,183 @@
+package api
+
+import (
+	"context"
+	"fmt"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"securitygo_pc4/cluster"
+	"securitygo_pc4/db"
+)
+
+// ═══════════════════════════════════════════════════════
+// SERVIDOR HTTP — SecurityGO PC4
+// ═══════════════════════════════════════════════════════
+
+type ConfigServidor struct {
+	Puerto         string
+	MongoURI       string
+	RedisURI       string
+	RutaModel1     string
+	RutaModel2     string
+	RutaModel3     string
+	WorkersPorNodo int
+	PuertoNodo1    string // Puerto TCP para nodo model1
+	PuertoNodo2    string // Puerto TCP para nodo model2
+	PuertoNodo3    string // Puerto TCP para nodo model3
+}
+
+// ConfigPredeterminada usa rutas relativas desde PC4/
+func ConfigPredeterminada() ConfigServidor {
+	return ConfigServidor{
+		Puerto:         getEnv("PORT", "8080"),
+		MongoURI:       getEnv("MONGO_URI", "mongodb://localhost:27017"),
+		RedisURI:       getEnv("REDIS_URI", "redis://localhost:6379"),
+		RutaModel1:     getEnv("MODEL1_PATH", "../models/model1.json"),
+		RutaModel2:     getEnv("MODEL2_PATH", "../models/model2.json"),
+		RutaModel3:     getEnv("MODEL3_PATH", "../models/model3.json"),
+		WorkersPorNodo: 2,
+		PuertoNodo1:    getEnv("NODE1_PORT", "9001"),
+		PuertoNodo2:    getEnv("NODE2_PORT", "9002"),
+		PuertoNodo3:    getEnv("NODE3_PORT", "9003"),
+	}
+}
+
+func IniciarServidor(cfg ConfigServidor) error {
+	fmt.Println("╔══════════════════════════════════════════════════╗")
+	fmt.Println("║   SecurityGO PC4 — API + Cluster TCP + Redis    ║")
+	fmt.Println("╚══════════════════════════════════════════════════╝")
+	fmt.Println()
+	fmt.Printf("[Config] Modelos:\n")
+	fmt.Printf("  Model1 → %s\n", cfg.RutaModel1)
+	fmt.Printf("  Model2 → %s\n", cfg.RutaModel2)
+	fmt.Printf("  Model3 → %s\n", cfg.RutaModel3)
+	fmt.Printf("[Config] Nodos TCP:\n")
+	fmt.Printf("  model1 → :%s\n", cfg.PuertoNodo1)
+	fmt.Printf("  model2 → :%s\n", cfg.PuertoNodo2)
+	fmt.Printf("  model3 → :%s\n", cfg.PuertoNodo3)
+	fmt.Println()
+
+	// ── 1. Conectar MongoDB ──
+	log.Println("[Init] Conectando a MongoDB...")
+	mongo, err := db.NuevoClienteMongo(cfg.MongoURI)
+	if err != nil {
+		return fmt.Errorf("error MongoDB: %w", err)
+	}
+	defer mongo.Cerrar()
+	mongo.GuardarLog("INFO", "servidor", "SecurityGO PC4 iniciado")
+
+	// ── 2. Conectar Redis (modo degradado si no disponible) ──
+	log.Println("[Init] Conectando a Redis...")
+	var redisClient *db.ClienteRedis
+	redisClient, err = db.NuevoClienteRedis(cfg.RedisURI)
+	if err != nil {
+		log.Printf("[Init] ⚠ Redis no disponible: %v — continuando sin caché\n", err)
+		redisClient = nil
+	}
+	if redisClient != nil {
+		defer redisClient.Cerrar()
+	}
+
+	// ── 3. Iniciar nodos TCP (cada uno carga su modelo ML) ──
+	log.Println("[Init] Iniciando nodos TCP del cluster...")
+	type cfgNodo struct {
+		id, puerto, ruta string
+	}
+	nodosConfig := []cfgNodo{
+		{"nodo-model1", cfg.PuertoNodo1, cfg.RutaModel1},
+		{"nodo-model2", cfg.PuertoNodo2, cfg.RutaModel2},
+		{"nodo-model3", cfg.PuertoNodo3, cfg.RutaModel3},
+	}
+
+	var nodosTCP []*cluster.NodoTCP
+	for _, n := range nodosConfig {
+		nodo, err := cluster.NuevoNodoTCP(n.id, n.puerto, n.ruta)
+		if err != nil {
+			return fmt.Errorf("error creando nodo TCP %s: %w", n.id, err)
+		}
+		if err := nodo.Iniciar(); err != nil {
+			return fmt.Errorf("error iniciando nodo TCP %s: %w", n.id, err)
+		}
+		nodosTCP = append(nodosTCP, nodo)
+	}
+	defer func() {
+		for _, n := range nodosTCP {
+			n.Cerrar()
+		}
+	}()
+
+	// ── 4. Crear coordinador TCP (conecta a los nodos) ──
+	log.Println("[Init] Creando coordinador TCP...")
+	coord, err := cluster.NuevoCoordinador(cluster.ConfigCluster{
+		Nodos: []cluster.ConfigNodo{
+			{Modelo: "model1", Direccion: "localhost:" + cfg.PuertoNodo1},
+			{Modelo: "model2", Direccion: "localhost:" + cfg.PuertoNodo2},
+			{Modelo: "model3", Direccion: "localhost:" + cfg.PuertoNodo3},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("error iniciando coordinador: %w", err)
+	}
+	defer coord.Cerrar()
+
+	// ── 5. Crear hub WebSocket ──
+	hub := NuevoHubWS(coord)
+
+	// ── 6. Registrar rutas ──
+	handler := NuevoHandler(coord, mongo, redisClient, hub)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/predict/crime-type", handler.PredecirTipoCrimen)
+	mux.HandleFunc("/predict/risk-zone", handler.PredecirZonaRiesgo)
+	mux.HandleFunc("/predict/arrest-prob", handler.PredecirProbArresto)
+	mux.HandleFunc("/health", handler.HealthCheck)
+	mux.HandleFunc("/predictions", handler.HistorialPredicciones)
+	mux.HandleFunc("/cache/stats", handler.EstadisticasCache)
+	mux.HandleFunc("/ws", hub.HandleWS)
+
+	http.Handle("/", CORSMiddleware(LoggingMiddleware(mux)))
+
+	// ── 7. Servidor con graceful shutdown ──
+	servidor := &http.Server{
+		Addr:         ":" + cfg.Puerto,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 60 * time.Second,
+		IdleTimeout:  120 * time.Second,
+	}
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		fmt.Printf("\n[Servidor] ✔ Escuchando en http://localhost:%s\n\n", cfg.Puerto)
+		fmt.Println("  Endpoints disponibles:")
+		fmt.Printf("  POST http://localhost:%s/predict/crime-type\n", cfg.Puerto)
+		fmt.Printf("  POST http://localhost:%s/predict/risk-zone\n", cfg.Puerto)
+		fmt.Printf("  POST http://localhost:%s/predict/arrest-prob\n", cfg.Puerto)
+		fmt.Printf("  GET  http://localhost:%s/health\n", cfg.Puerto)
+		fmt.Printf("  GET  http://localhost:%s/predictions?model=model1&limit=10\n", cfg.Puerto)
+		fmt.Printf("  GET  http://localhost:%s/cache/stats\n", cfg.Puerto)
+		fmt.Printf("  WS   ws://localhost:%s/ws\n\n", cfg.Puerto)
+		if err := servidor.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("[Servidor] error fatal: %v\n", err)
+		}
+	}()
+
+	<-quit
+	log.Println("[Servidor] Señal recibida — apagando...")
+	mongo.GuardarLog("INFO", "servidor", "SecurityGO PC4 detenido")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	return servidor.Shutdown(ctx)
+}
+
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
