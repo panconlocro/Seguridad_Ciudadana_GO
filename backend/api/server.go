@@ -71,7 +71,7 @@ func IniciarServidor(cfg ConfigServidor) error {
 		return fmt.Errorf("error MongoDB: %w", err)
 	}
 	defer mongo.Cerrar()
-	mongo.GuardarLog("INFO", "servidor", "SecurityGO PC4 iniciado")
+	mongo.GuardarLog("INFO", "servidor", "Modelos Iniciados")
 
 	// Inicializar usuario admin por defecto si no hay ninguno
 	hashAdmin, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
