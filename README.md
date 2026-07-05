@@ -46,23 +46,33 @@ Entrena y evalúa los tres modelos predictivos. Ejecuta los siguientes comandos 
 ```
 *Los modelos se entrenarán y se guardarán como archivos `.json` dentro de la carpeta `models/`.*
 
-### 5. Servicios de Base de Datos (Docker)
-El backend requiere MongoDB y Redis para manejar sesiones y almacenar datos. Utiliza Docker Compose para levantarlos:
+### 5. Servicios de Base de Datos (Docker / Nube)
+El backend requiere MongoDB y Redis para manejar sesiones y almacenar datos. Puedes utilizar bases de datos en la nube (ej. MongoDB Atlas y Upstash Redis) o levantar instancias locales usando Docker Compose:
 
 ```powershell
 docker-compose up -d
 ```
 
-### 6. Backend (Go API & TCP Cluster)
-Una vez que los modelos estén generados y las bases de datos corriendo, inicia el servidor backend. Desde la raíz, en una terminal nueva:
+### 6. Subir Modelos a MongoDB (Preparación)
+Antes de iniciar el backend por primera vez, debes subir los modelos `.json` generados en el paso 4 hacia tu base de datos de MongoDB. Desde una terminal nueva:
 
 ```powershell
 cd backend
-go run .
+go run . --mongo "<TU_MONGO_URI>" --upload-models
 ```
-*El servidor verificará la conexión a Mongo/Redis y levantará los nodos TCP con sus respectivos modelos JSON.*
+*(Si usas docker local, el URI es `mongodb://localhost:27017`)*
 
-### 7. Frontend
+### 7. Backend (Go API & TCP Cluster)
+Una vez que los modelos estén en la base de datos, inicia el servidor backend pasándole las conexiones de Mongo y Redis:
+
+```powershell
+cd backend
+go run . --mongo "<TU_MONGO_URI>" --redis "<TU_REDIS_URI>"
+```
+*(Si usas docker local, añade `--mongo "mongodb://localhost:27017" --redis "redis://localhost:6379"`).*
+*El servidor verificará la conexión a Mongo/Redis y levantará los nodos TCP descargando los modelos dinámicamente.*
+
+### 8. Frontend
 Levanta la interfaz web de la aplicación. Desde la raíz, en una terminal nueva:
 
 ```powershell
@@ -73,6 +83,10 @@ npm run dev
 *Ingresa al enlace local (usualmente `http://localhost:5173`) provisto en la consola para usar la aplicación.*
 
 ---
+
+## 🌐 Pruebas en Vivo (Live Demo)
+Puedes probar el proyecto ya desplegado en la nube en el siguiente enlace:
+- **[https://tu-proyecto.netlify.app](https://tu-proyecto.netlify.app)** *(Reemplaza con tu URL real de Netlify).*
 
 ## TODO
 - [ ] Agregar pruebas automatizadas (tests) para el backend y los modelos.
