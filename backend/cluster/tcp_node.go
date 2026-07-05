@@ -27,14 +27,14 @@ type NodoTCP struct {
 	activo     bool
 }
 
-// NuevoNodoTCP crea un nodo TCP que carga un modelo ML
-func NuevoNodoTCP(id, puerto, rutaModelo string) (*NodoTCP, error) {
-	modelo, err := cargarModeloJSON(rutaModelo)
+// NuevoNodoTCP crea un nodo TCP que carga un modelo ML desde un proveedor
+func NuevoNodoTCP(id, puerto, tipoModelo string, proveedor ProveedorModelos) (*NodoTCP, error) {
+	modelo, err := proveedor.ObtenerModelo(tipoModelo)
 	if err != nil {
 		return nil, fmt.Errorf("[NodoTCP %s] error cargando modelo: %w", id, err)
 	}
 
-	log.Printf("[NodoTCP %s] ✔ Modelo %s cargado desde %s\n", id, modelo.Tipo, rutaModelo)
+	log.Printf("[NodoTCP %s] ✔ Modelo %s cargado desde el proveedor\n", id, modelo.Tipo)
 
 	return &NodoTCP{
 		id:         id,

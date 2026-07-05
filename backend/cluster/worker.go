@@ -95,15 +95,16 @@ type NodoWorker struct {
 // NuevoNodoWorker crea un worker, carga el modelo y empieza a escuchar
 func NuevoNodoWorker(
 	id string,
-	rutaModelo string,
+	tipoModelo string,
+	proveedor ProveedorModelos,
 	tareas <-chan TareaPrediccion,
 	resultados chan<- ResultadoPrediccion,
 ) (*NodoWorker, error) {
-	modelo, err := cargarModeloJSON(rutaModelo)
+	modelo, err := proveedor.ObtenerModelo(tipoModelo)
 	if err != nil {
 		return nil, fmt.Errorf("[Worker %s] error cargando modelo: %w", id, err)
 	}
-	log.Printf("[Worker %s] ✔ Modelo %s cargado desde %s\n", id, modelo.Tipo, rutaModelo)
+	log.Printf("[Worker %s] ✔ Modelo %s cargado desde el proveedor\n", id, modelo.Tipo)
 
 	w := &NodoWorker{
 		id:         id,
@@ -215,7 +216,8 @@ func (w *NodoWorker) procesarTarea(t TareaPrediccion) ResultadoPrediccion {
 	return res
 }
 
-func cargarModeloJSON(ruta string) (*ModeloJSON, error) {
+// CargarModeloJSON lee un archivo JSON y lo deserializa en ModeloJSON
+func CargarModeloJSON(ruta string) (*ModeloJSON, error) {
 	data, err := os.ReadFile(ruta)
 	if err != nil {
 		return nil, fmt.Errorf("no se pudo leer %q: %w", ruta, err)

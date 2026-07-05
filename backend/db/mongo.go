@@ -6,6 +6,8 @@ import (
 	"log"
 	"time"
 
+	"securitygo_backend/cluster"
+
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -20,6 +22,7 @@ const (
 	NombreDB        = "securitygo"
 	ColeccionPred   = "predictions"
 	ColeccionLogs   = "cluster_logs"
+	ColeccionModelos= "ml_models"
 	TimeoutConexion = 10 * time.Second
 )
 
@@ -148,6 +151,48 @@ func (c *ClienteMongo) ContarPredicciones() (int64, error) {
 	defer cancel()
 	col := c.db.Collection(ColeccionPred)
 	return col.CountDocuments(ctx, bson.M{})
+}
+
+// ═══════════════════════════════════════════════════════
+// ALMACENAMIENTO DE MODELOS ML
+// ═══════════════════════════════════════════════════════
+
+// GuardarModelo guarda un modelo JSON en MongoDB
+func (c *ClienteMongo) GuardarModelo(modelo *cluster.ModeloJSON) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	col := c.db.Collection(ColeccionModelos)
+	
+	// Usamos upsert para sobreescribir el modelo si ya existe
+	opts := options.Update().SetUpsert(true)
+	filtro := bson.M{"tipo": modelo.Tipo}
+	actualizacion := bson.M{"$set": modelo}
+	
+	_, err := col.UpdateOne(ctx, filtro, actualizacion, opts)
+	if err != nil {
+		return fmt.Errorf("[MongoDB] error guardando modelo %s: %w", modelo.Tipo, err)
+	}
+	log.Printf("[MongoDB] ✔ Modelo %s guardado en base de datos\n", modelo.Tipo)
+	return nil
+}
+
+// ObtenerModelo implementa cluster.ProveedorModelos
+func (c *ClienteMongo) ObtenerModelo(tipo string) (*cluster.ModeloJSON, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	col := c.db.Collection(ColeccionModelos)
+	var modelo cluster.ModeloJSON
+	
+	err := col.FindOne(ctx, bson.M{"tipo": tipo}).Decode(&modelo)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("[MongoDB] el modelo %s no existe en la BD", tipo)
+		}
+		return nil, fmt.Errorf("[MongoDB] error obteniendo modelo %s: %w", tipo, err)
+	}
+	return &modelo, nil
 }
 
 // ═══════════════════════════════════════════════════════
