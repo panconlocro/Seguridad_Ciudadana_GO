@@ -15,7 +15,7 @@ RUN npm run build
 # ==========================================
 # ETAPA 2: Compilar Backend (Go)
 # ==========================================
-FROM golang:1.22-alpine AS backend-builder
+FROM golang:alpine AS backend-builder
 WORKDIR /app/backend
 
 # Copiar go.mod y descargar dependencias
