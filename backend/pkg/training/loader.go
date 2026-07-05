@@ -1,6 +1,7 @@
-package main
+package training
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -34,8 +35,15 @@ func leerTodasLasFilas(path string) ([]string, [][]string) {
 		log.Fatalf("Error abriendo archivo: %v", err)
 	}
 	defer file.Close()
+	return leerDesdeReader(file)
+}
 
-	reader := csv.NewReader(file)
+func leerTodasLasFilasDesdeBytes(data []byte) ([]string, [][]string) {
+	return leerDesdeReader(bytes.NewReader(data))
+}
+
+func leerDesdeReader(r io.Reader) ([]string, [][]string) {
+	reader := csv.NewReader(r)
 	reader.ReuseRecord = false
 
 	// Leer encabezado

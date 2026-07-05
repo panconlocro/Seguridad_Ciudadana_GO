@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { crearWebSocket, obtenerHealth, obtenerCacheStats } from '../api';
+import { crearWebSocket, obtenerHealth, obtenerCacheStats, entrenarModelo } from '../api';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell
@@ -26,6 +26,13 @@ export default function AdminPanel() {
   const [metricas, setMetricas] = useState(null);
   const [health, setHealth] = useState(null);
   const [cacheStats, setCacheStats] = useState(null);
+  
+  // Estados para Entrenamiento
+  const [modeloSeleccionado, setModeloSeleccionado] = useState('model1');
+  const [archivoCsv, setArchivoCsv] = useState(null);
+  const [entrenando, setEntrenando] = useState(false);
+  const [mensajeEntrenamiento, setMensajeEntrenamiento] = useState('');
+
   const wsRef = useRef(null);
 
   // Conectar WebSocket
@@ -76,6 +83,35 @@ export default function AdminPanel() {
     return () => clearInterval(interval);
   }, []);
 
+  // Función para manejar el entrenamiento
+  const handleEntrenar = async (e) => {
+    e.preventDefault();
+    if (!archivoCsv) {
+      setMensajeEntrenamiento('Por favor selecciona un archivo CSV.');
+      return;
+    }
+    
+    setEntrenando(true);
+    setMensajeEntrenamiento('Subiendo archivo e iniciando entrenamiento...');
+    
+    const formData = new FormData();
+    formData.append('model_type', modeloSeleccionado);
+    formData.append('file', archivoCsv);
+    
+    try {
+      const res = await entrenarModelo(formData);
+      setMensajeEntrenamiento(`✅ Éxito: ${res.mensaje}`);
+      setArchivoCsv(null); // Reset form
+      if (document.getElementById('csv-upload')) {
+        document.getElementById('csv-upload').value = '';
+      }
+    } catch (error) {
+      setMensajeEntrenamiento(`❌ Error: ${error.message}`);
+    } finally {
+      setEntrenando(false);
+    }
+  };
+
   // Datos para gráfico de barras de predicciones por nodo
   const chartNodos = metricas?.nodos?.map(n => ({
     nombre: n.id,
@@ -105,6 +141,7 @@ export default function AdminPanel() {
 
       {/* Stat strip — inline stats with dividers */}
       <div className="card stat-strip fade-in" style={{ marginBottom: 'var(--sp-8)' }}>
+        {/* ... stats ... */}
         <div className="stat-strip-item">
           <span className="stat-icon">▣</span>
           <span className="stat-value" style={{ color: 'var(--signal-amber)' }}>
@@ -136,6 +173,64 @@ export default function AdminPanel() {
           </span>
           <span className="stat-label">Clientes WebSocket</span>
         </div>
+      </div>
+
+      {/* Sección de Entrenamiento */}
+      <div className="card fade-in" style={{ padding: 'var(--sp-5)', marginBottom: 'var(--sp-8)' }}>
+        <h3 className="section-title" style={{ marginBottom: 'var(--sp-4)' }}>
+          Entrenar Nuevo Modelo
+        </h3>
+        <p style={{ color: 'var(--dim-silver)', marginBottom: 'var(--sp-5)' }}>
+          Sube un archivo CSV limpio para entrenar y recargar un modelo en caliente (hot-reload).
+        </p>
+        <form onSubmit={handleEntrenar} style={{ display: 'flex', gap: 'var(--sp-4)', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="input-group" style={{ minWidth: '200px' }}>
+            <label>Tipo de Modelo</label>
+            <select 
+              className="input-field"
+              value={modeloSeleccionado}
+              onChange={(e) => setModeloSeleccionado(e.target.value)}
+              disabled={entrenando}
+            >
+              <option value="model1">Model 1 (Tipo de Crimen)</option>
+              <option value="model2">Model 2 (Zona de Riesgo)</option>
+              <option value="model3">Model 3 (Prob. de Arresto)</option>
+            </select>
+          </div>
+          
+          <div className="input-group" style={{ minWidth: '300px', flex: 1 }}>
+            <label>Dataset (CSV)</label>
+            <input 
+              type="file" 
+              id="csv-upload"
+              accept=".csv"
+              className="input-field" 
+              onChange={(e) => setArchivoCsv(e.target.files[0])}
+              disabled={entrenando}
+            />
+          </div>
+          
+          <button 
+            type="submit" 
+            className="btn btn-primary" 
+            disabled={entrenando || !archivoCsv}
+            style={{ marginTop: 'var(--sp-5)' }}
+          >
+            {entrenando ? 'Entrenando...' : 'Subir y Entrenar'}
+          </button>
+        </form>
+        {mensajeEntrenamiento && (
+          <div style={{ 
+            marginTop: 'var(--sp-4)', 
+            padding: 'var(--sp-3)', 
+            borderRadius: '6px',
+            background: mensajeEntrenamiento.startsWith('❌') ? 'rgba(244, 99, 125, 0.1)' : 'rgba(45, 212, 168, 0.1)',
+            color: mensajeEntrenamiento.startsWith('❌') ? 'var(--signal-rose)' : 'var(--grid-teal)',
+            fontSize: '0.9rem'
+          }}>
+            {mensajeEntrenamiento}
+          </div>
+        )}
       </div>
 
       {/* Charts */}

@@ -220,9 +220,13 @@ func cargarModeloJSON(ruta string) (*ModeloJSON, error) {
 	if err != nil {
 		return nil, fmt.Errorf("no se pudo leer %q: %w", ruta, err)
 	}
+	return cargarModeloJSONDesdeBytes(data)
+}
+
+func cargarModeloJSONDesdeBytes(data []byte) (*ModeloJSON, error) {
 	var modelo ModeloJSON
 	if err := json.Unmarshal(data, &modelo); err != nil {
-		return nil, fmt.Errorf("JSON inválido en %q: %w", ruta, err)
+		return nil, fmt.Errorf("JSON inválido: %w", err)
 	}
 	return &modelo, nil
 }
@@ -230,6 +234,9 @@ func cargarModeloJSON(ruta string) (*ModeloJSON, error) {
 // inferirConModelo ejecuta inferencia usando un modelo cargado
 // Función standalone usada por NodoTCP para predicciones por TCP
 func inferirConModelo(modelo *ModeloJSON, features []float64) (map[string]interface{}, error) {
+	if modelo == nil {
+		return nil, fmt.Errorf("modelo no entrenado aún")
+	}
 	switch modelo.Tipo {
 	case "model1":
 		if modelo.Modelo1 == nil {

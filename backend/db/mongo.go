@@ -1,13 +1,17 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/gridfs"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
@@ -148,6 +152,117 @@ func (c *ClienteMongo) ContarPredicciones() (int64, error) {
 	defer cancel()
 	col := c.db.Collection(ColeccionPred)
 	return col.CountDocuments(ctx, bson.M{})
+}
+
+// ═══════════════════════════════════════════════════════
+// GRIDFS — Almacenamiento de Modelos y CSVs
+// ═══════════════════════════════════════════════════════
+
+// GuardarArchivoGridFS guarda o sobreescribe un archivo en GridFS
+func (c *ClienteMongo) GuardarArchivoGridFS(nombre string, data []byte) error {
+	opts := options.GridFSBucket().SetName("archivos")
+	bucket, err := gridfs.NewBucket(c.db, opts)
+	if err != nil {
+		return fmt.Errorf("[GridFS] error creando bucket: %w", err)
+	}
+
+	// Borrar versiones anteriores si existen
+	cursor, err := bucket.Find(bson.M{"filename": nombre})
+	if err == nil {
+		type fileInfo struct {
+			ID primitive.ObjectID `bson:"_id"`
+		}
+		for cursor.Next(context.Background()) {
+			var f fileInfo
+			if err := cursor.Decode(&f); err == nil {
+				_ = bucket.Delete(f.ID)
+			}
+		}
+	}
+
+	uploadStream, err := bucket.OpenUploadStream(nombre)
+	if err != nil {
+		return fmt.Errorf("[GridFS] error abriendo stream: %w", err)
+	}
+	defer uploadStream.Close()
+
+	if _, err := io.Copy(uploadStream, bytes.NewReader(data)); err != nil {
+		return fmt.Errorf("[GridFS] error escribiendo: %w", err)
+	}
+	return nil
+}
+
+// ObtenerArchivoGridFS descarga un archivo completo desde GridFS
+func (c *ClienteMongo) ObtenerArchivoGridFS(nombre string) ([]byte, error) {
+	opts := options.GridFSBucket().SetName("archivos")
+	bucket, err := gridfs.NewBucket(c.db, opts)
+	if err != nil {
+		return nil, fmt.Errorf("[GridFS] error creando bucket: %w", err)
+	}
+
+	var buf bytes.Buffer
+	_, err = bucket.DownloadToStreamByName(nombre, &buf)
+	if err != nil {
+		return nil, fmt.Errorf("[GridFS] error descargando %s: %w", nombre, err)
+	}
+	return buf.Bytes(), nil
+}
+
+// ExisteArchivoGridFS verifica si un archivo está en GridFS
+func (c *ClienteMongo) ExisteArchivoGridFS(nombre string) bool {
+	opts := options.GridFSBucket().SetName("archivos")
+	bucket, err := gridfs.NewBucket(c.db, opts)
+	if err != nil {
+		return false
+	}
+	cursor, err := bucket.Find(bson.M{"filename": nombre})
+	if err != nil {
+		return false
+	}
+	defer cursor.Close(context.Background())
+	return cursor.Next(context.Background())
+}
+
+// ═══════════════════════════════════════════════════════
+// JOBS DE ENTRENAMIENTO
+// ═══════════════════════════════════════════════════════
+
+const ColeccionTraining = "training_jobs"
+
+type TrainingJob struct {
+	ID        string    `bson:"_id,omitempty" json:"id,omitempty"`
+	Modelo    string    `bson:"modelo" json:"modelo"`
+	Estado    string    `bson:"estado" json:"estado"` // "en_progreso", "completado", "error"
+	ErrorMsg  string    `bson:"error_msg,omitempty" json:"error_msg,omitempty"`
+	CreadoEn  time.Time `bson:"creado_en" json:"creado_en"`
+	FinalizEn time.Time `bson:"finaliz_en,omitempty" json:"finaliz_en,omitempty"`
+}
+
+func (c *ClienteMongo) CrearTrabajoEntrenamiento(modelo string) (*mongo.InsertOneResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	job := TrainingJob{
+		Modelo:   modelo,
+		Estado:   "en_progreso",
+		CreadoEn: time.Now().UTC(),
+	}
+	return c.db.Collection(ColeccionTraining).InsertOne(ctx, job)
+}
+
+func (c *ClienteMongo) ActualizarTrabajoEntrenamiento(id interface{}, estado, errorMsg string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	update := bson.M{
+		"$set": bson.M{
+			"estado":     estado,
+			"error_msg":  errorMsg,
+			"finaliz_en": time.Now().UTC(),
+		},
+	}
+	_, err := c.db.Collection(ColeccionTraining).UpdateOne(ctx, bson.M{"_id": id}, update)
+	return err
 }
 
 // ═══════════════════════════════════════════════════════

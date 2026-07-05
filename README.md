@@ -20,7 +20,14 @@ Si vas a utilizar los notebooks de exploración y experimentación, configura el
 ```
 
 ### 2. Descarga de Datos (Download Data)
-Consigue el dataset original y ubícalo en la carpeta cruda (raw). Asegúrate de que la ruta final quede así:
+Consigue el dataset original y ubícalo en la carpeta cruda (raw). 
+
+Desde el repositorio: 
+
+`py scripts\download_dataset.py`
+
+Asegúrate de que la ruta final quede así:
+
 `data/raw/Crime_Data_from_2020_to_Present.csv`
 
 ### 3. Limpieza de Datos (Cleanse)
@@ -31,36 +38,25 @@ go run scripts/Cleanse/main.go
 ```
 *Este proceso generará el archivo limpio en `data/processed/Crime_Data_Clean.csv`.*
 
-### 4. Entrenamiento de Modelos (Models)
-Entrena y evalúa los tres modelos predictivos. Ejecuta los siguientes comandos uno por uno desde la raíz del proyecto:
-
-```powershell
-# Modelo 1: Clasificación de tipo de crimen
-.\run_models.ps1 run --model-type model1
-
-# Modelo 2: Predicción de zona de riesgo (coordenadas)
-.\run_models.ps1 run --model-type model2
-
-# Modelo 3: Probabilidad de arresto
-.\run_models.ps1 run --model-type model3
-```
-*Los modelos se entrenarán y se guardarán como archivos `.json` dentro de la carpeta `models/`.*
+### 4. Entrenamiento de Modelos (Backend API)
+El entrenamiento y persistencia de los modelos ahora se gestionan dinámicamente mediante el **backend** de la aplicación utilizando la API (`POST /train`) y **MongoDB GridFS**. Ya no es necesario ejecutar scripts en la terminal para generar archivos locales; basta con tener las bases de datos y el servidor backend corriendo.
 
 ### 5. Servicios de Base de Datos (Docker)
-El backend requiere MongoDB y Redis para manejar sesiones y almacenar datos. Utiliza Docker Compose para levantarlos:
+El backend requiere MongoDB (incluyendo soporte de GridFS) y Redis para manejar sesiones y almacenar datos. Utiliza Docker Compose para levantarlos:
 
 ```powershell
 docker-compose up -d
 ```
 
 ### 6. Backend (Go API & TCP Cluster)
-Una vez que los modelos estén generados y las bases de datos corriendo, inicia el servidor backend. Desde la raíz, en una terminal nueva:
+Una vez que las bases de datos estén corriendo, inicia el servidor backend. Desde la raíz, en una terminal nueva:
 
 ```powershell
 cd backend
-go run .
+.\run_backend.ps1
 ```
-*El servidor verificará la conexión a Mongo/Redis y levantará los nodos TCP con sus respectivos modelos JSON.*
+*(También puedes ejecutar `go run .` directamente).*
+*El servidor verificará la conexión a Mongo/Redis, descargará los últimos modelos desde GridFS (si existen), y levantará los nodos TCP locales listos para servir o recibir nuevos entrenamientos.*
 
 ### 7. Frontend
 Levanta la interfaz web de la aplicación. Desde la raíz, en una terminal nueva:

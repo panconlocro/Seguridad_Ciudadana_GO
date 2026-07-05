@@ -1,6 +1,7 @@
-package main
+package training
 
 import (
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"io"
@@ -128,14 +129,21 @@ func CargarCSVLimpioE(path string) ([]CrimeClean, error) {
 		return nil, fmt.Errorf("no se pudo abrir %q: %w", path, err)
 	}
 	defer file.Close()
+	return cargarCSVDesdeReader(file)
+}
 
-	reader := csv.NewReader(file)
+func CargarCSVLimpioDesdeBytesE(data []byte) ([]CrimeClean, error) {
+	return cargarCSVDesdeReader(bytes.NewReader(data))
+}
+
+func cargarCSVDesdeReader(r io.Reader) ([]CrimeClean, error) {
+	reader := csv.NewReader(r)
 	reader.ReuseRecord = false
 
 	// Leer encabezado
 	headers, err := reader.Read()
 	if err != nil {
-		return nil, fmt.Errorf("no se pudo leer el encabezado de %q: %w", path, err)
+		return nil, fmt.Errorf("no se pudo leer el encabezado: %w", err)
 	}
 
 	idx := make(map[string]int)
@@ -178,7 +186,7 @@ func CargarCSVLimpioE(path string) ([]CrimeClean, error) {
 			break
 		}
 		if err != nil {
-			return nil, fmt.Errorf("error leyendo fila %d de %q: %w", rowNum+2, path, err)
+			return nil, fmt.Errorf("error leyendo fila %d: %w", rowNum+2, err)
 		}
 		rowNum++
 

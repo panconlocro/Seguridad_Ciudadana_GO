@@ -28,21 +28,35 @@ type NodoTCP struct {
 }
 
 // NuevoNodoTCP crea un nodo TCP que carga un modelo ML
-func NuevoNodoTCP(id, puerto, rutaModelo string) (*NodoTCP, error) {
+func NuevoNodoTCP(id, puerto, rutaModelo, modeloTipo string) (*NodoTCP, error) {
 	modelo, err := cargarModeloJSON(rutaModelo)
 	if err != nil {
-		return nil, fmt.Errorf("[NodoTCP %s] error cargando modelo: %w", id, err)
+		log.Printf("[NodoTCP %s] ⚠ Advertencia: no se pudo cargar modelo inicial: %v (esperando entrenamiento)\n", id, err)
+		// No devolvemos error para permitir que el nodo inicie vacío
+		modelo = nil
+	} else {
+		log.Printf("[NodoTCP %s] ✔ Modelo %s cargado desde %s\n", id, modelo.Tipo, rutaModelo)
 	}
-
-	log.Printf("[NodoTCP %s] ✔ Modelo %s cargado desde %s\n", id, modelo.Tipo, rutaModelo)
 
 	return &NodoTCP{
 		id:         id,
 		puerto:     puerto,
 		modelo:     modelo,
-		modeloTipo: modelo.Tipo,
+		modeloTipo: modeloTipo,
 		activo:     true,
 	}, nil
+}
+
+// RecargarModelo recarga el modelo en memoria sin reiniciar el servidor TCP
+func (n *NodoTCP) RecargarModelo(data []byte) error {
+	modelo, err := cargarModeloJSONDesdeBytes(data)
+	if err != nil {
+		return fmt.Errorf("[NodoTCP %s] error recargando modelo: %w", n.id, err)
+	}
+	n.modelo = modelo
+	n.modeloTipo = modelo.Tipo
+	log.Printf("[NodoTCP %s] ✔ Modelo recargado exitosamente en caliente\n", n.id)
+	return nil
 }
 
 // Iniciar abre el listener TCP y empieza a aceptar conexiones

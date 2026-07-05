@@ -6,9 +6,9 @@ param(
     [string]$port    = "8080",
     [string]$mongo   = "mongodb://localhost:27017",
     [int]   $workers = 2,
-    [string]$model1  = "../models/model1.json",
-    [string]$model2  = "../models/model2.json",
-    [string]$model3  = "../models/model3.json"
+    [string]$model1  = "./models_cache/model1.json",
+    [string]$model2  = "./models_cache/model2.json",
+    [string]$model3  = "./models_cache/model3.json"
 )
 
 Write-Host ""
@@ -17,15 +17,10 @@ Write-Host "║      SecurityGO Backend — API REST + Cluster ║" -ForegroundC
 Write-Host "╚══════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 
-# Verificar que los modelos existen
-foreach ($path in @($model1, $model2, $model3)) {
-    if (-not (Test-Path $path)) {
-        Write-Host "[ERROR] No se encontró el modelo: $path" -ForegroundColor Red
-        Write-Host "  Asegúrate de haber ejecutado el PC3 primero" -ForegroundColor Yellow
-        exit 1
-    }
-}
-Write-Host "[Init] ✔ Modelos encontrados en ../models/" -ForegroundColor Green
+# Se omitió la verificación estricta de archivos locales de modelos
+# porque el servidor los descargará automáticamente desde MongoDB GridFS
+# si no existen en ./models_cache/.
+Write-Host "[Init] ✔ Iniciando backend. Los modelos se descargarán de GridFS si están ausentes." -ForegroundColor Green
 
 # Verificar MongoDB
 Write-Host "[Init] Verificando MongoDB en $mongo ..." -ForegroundColor Yellow

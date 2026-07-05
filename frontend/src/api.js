@@ -12,9 +12,13 @@ async function apiFetch(endpoint, options = {}) {
   const token = localStorage.getItem('securitygo_token');
   
   const headers = {
-    'Content-Type': 'application/json',
     ...options.headers,
   };
+  
+  // Solo agregar application/json si el body no es FormData
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -85,6 +89,13 @@ export async function obtenerHistorial(modelo = '', limite = 20) {
 
 export async function obtenerCacheStats() {
   return apiFetch('/cache/stats');
+}
+
+export async function entrenarModelo(formData) {
+  return apiFetch('/train', {
+    method: 'POST',
+    body: formData,
+  });
 }
 
 // ── WebSocket ──

@@ -1,6 +1,7 @@
-package main
+package training
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -128,6 +129,31 @@ func ejecutarTrain(opciones opcionesCLI) error {
 		output = rutaModeloPredeterminada(opciones.modelType)
 	}
 	return GuardarModelo(output, modelo)
+}
+
+// EntrenarDesdeMemoria entrena un modelo a partir de CSV data en memoria y retorna su representación JSON
+func EntrenarDesdeMemoria(tipo string, csvData []byte) ([]byte, error) {
+	datos, err := CargarCSVLimpioDesdeBytesE(csvData)
+	if err != nil {
+		return nil, fmt.Errorf("error cargando datos CSV: %w", err)
+	}
+	
+	// Configuracion predeterminada para API
+	cfg := ConfigPredeterminada()
+	// Ajustar a algo razonable para servidor
+	cfg.Workers = 2 
+	
+	modelo, err := entrenarModelo(tipo, datos, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("error entrenando modelo: %w", err)
+	}
+	
+	jsonBytes, err := json.MarshalIndent(modelo, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("error serializando modelo a JSON: %w", err)
+	}
+	
+	return jsonBytes, nil
 }
 
 func ejecutarEvaluate(opciones opcionesCLI) error {

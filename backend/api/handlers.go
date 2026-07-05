@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	"securitygo_backend/cluster"
 	"securitygo_backend/db"
+	"securitygo_backend/pkg/training"
 )
 
 // ═══════════════════════════════════════════════════════
@@ -23,11 +25,12 @@ type Handler struct {
 	mongo *db.ClienteMongo
 	redis *db.ClienteRedis // puede ser nil si Redis no está disponible
 	hub   *HubWS
+	nodos []*cluster.NodoTCP // Referencias a los nodos locales para hot-reload
 }
 
 // NuevoHandler crea los handlers con sus dependencias
-func NuevoHandler(coord *cluster.Coordinador, mongo *db.ClienteMongo, redis *db.ClienteRedis, hub *HubWS) *Handler {
-	return &Handler{coord: coord, mongo: mongo, redis: redis, hub: hub}
+func NuevoHandler(coord *cluster.Coordinador, mongo *db.ClienteMongo, redis *db.ClienteRedis, hub *HubWS, nodos []*cluster.NodoTCP) *Handler {
+	return &Handler{coord: coord, mongo: mongo, redis: redis, hub: hub, nodos: nodos}
 }
 
 // -- Request / Response types --
@@ -412,3 +415,98 @@ func CORSMiddleware(siguiente http.Handler) http.Handler {
 	})
 }
 
+// EntrenarModelo POST /train
+func (h *Handler) EntrenarModelo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		respError(w, http.StatusMethodNotAllowed, "usar POST")
+		return
+	}
+
+	// 1. Leer FormData
+	if err := r.ParseMultipartForm(10 << 20); err != nil { // 10MB limit in memory
+		respError(w, http.StatusBadRequest, "error leyendo form-data")
+		return
+	}
+
+	modelType := r.FormValue("model_type")
+	if modelType != "model1" && modelType != "model2" && modelType != "model3" {
+		respError(w, http.StatusBadRequest, "model_type debe ser model1, model2 o model3")
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		respError(w, http.StatusBadRequest, "falta el archivo CSV 'file'")
+		return
+	}
+	defer file.Close()
+
+	// Leer CSV
+	csvData, err := io.ReadAll(file)
+	if err != nil {
+		respError(w, http.StatusInternalServerError, "error leyendo archivo")
+		return
+	}
+
+	// 2. Guardar CSV original en GridFS
+	fileName := fmt.Sprintf("dataset_%s_%d.csv", modelType, time.Now().Unix())
+	if err := h.mongo.GuardarArchivoGridFS(fileName, csvData); err != nil {
+		log.Printf("[API] error guardando dataset en GridFS: %v\n", err)
+	}
+
+	// 3. Crear Trabajo en BD
+	res, err := h.mongo.CrearTrabajoEntrenamiento(modelType)
+	if err != nil {
+		respError(w, http.StatusInternalServerError, "error creando trabajo")
+		return
+	}
+	jobID := res.InsertedID
+
+	// 4. Iniciar goroutine para entrenar
+	go func(id interface{}, t string, data []byte) {
+		log.Printf("[Entrenamiento] Iniciando trabajo %v para %s\n", id, t)
+
+		modeloJSONBytes, err := training.EntrenarDesdeMemoria(t, data)
+		if err != nil {
+			log.Printf("[Entrenamiento] error: %v\n", err)
+			h.mongo.ActualizarTrabajoEntrenamiento(id, "error", err.Error())
+			return
+		}
+
+		// Guardar modelo en GridFS
+		nombreModelo := t + ".json"
+		if err := h.mongo.GuardarArchivoGridFS(nombreModelo, modeloJSONBytes); err != nil {
+			log.Printf("[Entrenamiento] error guardando modelo: %v\n", err)
+			h.mongo.ActualizarTrabajoEntrenamiento(id, "error", "error guardando modelo en GridFS")
+			return
+		}
+
+		h.mongo.ActualizarTrabajoEntrenamiento(id, "completado", "")
+		log.Printf("[Entrenamiento] %s completado con éxito\n", t)
+
+		// Recargar modelo en el nodo TCP local correspondiente
+		for _, nodo := range h.nodos {
+			if strings.Contains(nodo.Estado().ID, t) {
+				if err := nodo.RecargarModelo(modeloJSONBytes); err != nil {
+					log.Printf("[Entrenamiento] advertencia: no se pudo recargar el nodo %s: %v\n", nodo.Estado().ID, err)
+				}
+			}
+		}
+
+		// Notificar por WebSocket
+		if h.hub != nil {
+			h.hub.Broadcast(MensajeWS{
+				Tipo: "entrenamiento_completado",
+				Datos: map[string]interface{}{
+					"modelo": t,
+					"job_id": id,
+				},
+			})
+		}
+	}(jobID, modelType, csvData)
+
+	respOK(w, map[string]interface{}{
+		"mensaje": "entrenamiento iniciado",
+		"job_id":  jobID,
+	})
+}

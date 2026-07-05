@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -27,21 +28,23 @@ type ConfigServidor struct {
 	RutaModel1     string
 	RutaModel2     string
 	RutaModel3     string
+	FrontendDist   string // Ruta para archivos estáticos del frontend
 	WorkersPorNodo int
 	PuertoNodo1    string // Puerto TCP para nodo model1
 	PuertoNodo2    string // Puerto TCP para nodo model2
 	PuertoNodo3    string // Puerto TCP para nodo model3
 }
 
-// ConfigPredeterminada usa rutas relativas desde PC4/
+// ConfigPredeterminada usa rutas relativas al backend o configurables
 func ConfigPredeterminada() ConfigServidor {
 	return ConfigServidor{
 		Puerto:         getEnv("PORT", "8080"),
 		MongoURI:       getEnv("MONGO_URI", "mongodb://localhost:27017"),
 		RedisURI:       getEnv("REDIS_URI", "redis://localhost:6379"),
-		RutaModel1:     getEnv("MODEL1_PATH", "../models/model1.json"),
-		RutaModel2:     getEnv("MODEL2_PATH", "../models/model2.json"),
-		RutaModel3:     getEnv("MODEL3_PATH", "../models/model3.json"),
+		RutaModel1:     getEnv("MODEL1_PATH", "./models_cache/model1.json"),
+		RutaModel2:     getEnv("MODEL2_PATH", "./models_cache/model2.json"),
+		RutaModel3:     getEnv("MODEL3_PATH", "./models_cache/model3.json"),
+		FrontendDist:   getEnv("FRONTEND_DIST", "./public"),
 		WorkersPorNodo: 2,
 		PuertoNodo1:    getEnv("NODE1_PORT", "9001"),
 		PuertoNodo2:    getEnv("NODE2_PORT", "9002"),
@@ -91,18 +94,36 @@ func IniciarServidor(cfg ConfigServidor) error {
 
 	// ── 3. Iniciar nodos TCP (cada uno carga su modelo ML) ──
 	log.Println("[Init] Iniciando nodos TCP del cluster...")
+
+	// Crear directorio de caché de modelos si no existe
+	if err := os.MkdirAll(filepath.Dir(cfg.RutaModel1), 0755); err != nil {
+		log.Printf("[Init] Advertencia: no se pudo crear directorio de caché de modelos: %v", err)
+	}
+
 	type cfgNodo struct {
-		id, puerto, ruta string
+		id, puerto, ruta, modelo string
 	}
 	nodosConfig := []cfgNodo{
-		{"nodo-model1", cfg.PuertoNodo1, cfg.RutaModel1},
-		{"nodo-model2", cfg.PuertoNodo2, cfg.RutaModel2},
-		{"nodo-model3", cfg.PuertoNodo3, cfg.RutaModel3},
+		{"nodo-model1", cfg.PuertoNodo1, cfg.RutaModel1, "model1"},
+		{"nodo-model2", cfg.PuertoNodo2, cfg.RutaModel2, "model2"},
+		{"nodo-model3", cfg.PuertoNodo3, cfg.RutaModel3, "model3"},
 	}
 
 	var nodosTCP []*cluster.NodoTCP
 	for _, n := range nodosConfig {
-		nodo, err := cluster.NuevoNodoTCP(n.id, n.puerto, n.ruta)
+		// Intentar descargar modelo actualizado desde GridFS
+		nombreGridFS := n.modelo + ".json"
+		if mongo.ExisteArchivoGridFS(nombreGridFS) {
+			data, err := mongo.ObtenerArchivoGridFS(nombreGridFS)
+			if err == nil {
+				log.Printf("[Init] Modelo %s encontrado en GridFS, usando versión actualizada", n.modelo)
+				os.WriteFile(n.ruta, data, 0644)
+			} else {
+				log.Printf("[Init] Error descargando modelo %s de GridFS: %v. Usando local.", n.modelo, err)
+			}
+		}
+
+		nodo, err := cluster.NuevoNodoTCP(n.id, n.puerto, n.ruta, n.modelo)
 		if err != nil {
 			return fmt.Errorf("error creando nodo TCP %s: %w", n.id, err)
 		}
@@ -135,7 +156,7 @@ func IniciarServidor(cfg ConfigServidor) error {
 	hub := NuevoHubWS(coord)
 
 	// ── 6. Registrar rutas ──
-	handler := NuevoHandler(coord, mongo, redisClient, hub)
+	handler := NuevoHandler(coord, mongo, redisClient, hub, nodosTCP)
 	mux := http.NewServeMux()
 
 	// Rutas públicas (sin JWT)
@@ -151,12 +172,14 @@ func IniciarServidor(cfg ConfigServidor) error {
 	protegido.HandleFunc("/predict/arrest-prob", handler.PredecirProbArresto)
 	protegido.HandleFunc("/predictions", handler.HistorialPredicciones)
 	protegido.HandleFunc("/cache/stats", handler.EstadisticasCache)
+	protegido.HandleFunc("/train", handler.EntrenarModelo)
 	mux.Handle("/predict/", JWTMiddleware(protegido))
 	mux.Handle("/predictions", JWTMiddleware(protegido))
 	mux.Handle("/cache/", JWTMiddleware(protegido))
+	mux.Handle("/train", JWTMiddleware(protegido))
 
 	// Servir frontend estático (SPA)
-	fs := http.FileServer(http.Dir("../frontend/dist"))
+	fs := http.FileServer(http.Dir(cfg.FrontendDist))
 	mux.Handle("/app/", http.StripPrefix("/app/", fs))
 
 	http.Handle("/", CORSMiddleware(LoggingMiddleware(mux)))
