@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const defaultDataPath = "scripts/Cleanse/data/processed/Crime_Data_Clean.csv"
+const defaultDataPath = "data/processed/Crime_Data_Clean.csv"
 
 type opcionesCLI struct {
 	dataPath   string

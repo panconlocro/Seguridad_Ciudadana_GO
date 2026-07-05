@@ -70,8 +70,8 @@ func median(data []float64) float64 {
 }
 
 func main() {
-	inputFile := "scripts/data/raw/Crime_Data_from_2020_to_Present.csv"
-	outputFile := "scripts/Cleanse/data/processed/Crime_Data_Clean.csv"
+	inputFile := "data/raw/Crime_Data_from_2020_to_Present.csv"
+	outputFile := "data/processed/Crime_Data_Clean.csv"
 
 	if len(os.Args) > 1 {
 		inputFile = os.Args[1]
