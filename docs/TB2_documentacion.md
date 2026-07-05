@@ -42,9 +42,15 @@ Para el entregable final se rediseñó completamente la interfaz bajo el concept
 
 ### Componentes implementados
 
-#### 2.1 Sistema de Autenticación (Login)
+#### 2.1 Sistema de Autenticación y Registro (Login + Register)
 
-El componente `Login.jsx` presenta una interfaz de autenticación moderna, con el logo CSS integrado de SecurityGO y un layout limpio (con link toggle). Tras ingresar credenciales válidas, se realiza una petición `POST /login` al backend Go, que retorna un **token JWT firmado con HS256**. Este token se almacena en `localStorage` y se adjunta automáticamente en todas las peticiones subsiguientes mediante el header `Authorization: Bearer <token>`.
+El componente `Login.jsx` presenta una interfaz de autenticación moderna con **dos pestañas**: "Iniciar Sesión" y "Crear Cuenta". Los usuarios nuevos pueden registrarse directamente desde la interfaz, enviando un `POST /register` al backend, que cifra la contraseña con **bcrypt** y la almacena en MongoDB. Para el inicio de sesión, se realiza una petición `POST /login` que valida las credenciales contra la base de datos y retorna un **token JWT firmado con HS256**. Este token se almacena en `localStorage` y se adjunta automáticamente en todas las peticiones subsiguientes mediante el header `Authorization: Bearer <token>`.
+
+Validaciones implementadas en el formulario de registro:
+- Nombre de usuario: mínimo 3 caracteres
+- Contraseña: mínimo 6 caracteres
+- Detección de usuario duplicado (error 409 desde el backend)
+- Mensaje de éxito con transición automática a la pestaña de login
 
 El `AuthContext.jsx` gestiona el estado global de sesión (usuario, rol, token) y expone funciones `login()` y `logout()` para todos los componentes hijos.
 
@@ -90,23 +96,43 @@ Se incluye una barra horizontal de filtros (*inline*) por modelo y límite de re
 
 ---
 
-## 3. Autenticación JWT en el Backend Go
+## 3. Autenticación y Registro en el Backend Go
 
-### Implementación (`api/auth.go`)
+### Implementación (`api/auth.go` + `db/mongo.go`)
 
-Se añadió un módulo de autenticación basado en **JSON Web Tokens (JWT)** utilizando la librería `github.com/golang-jwt/jwt/v5`.
+Se implementó un sistema completo de autenticación y registro de usuarios basado en **JSON Web Tokens (JWT)** con `github.com/golang-jwt/jwt/v5` y cifrado de contraseñas con **bcrypt** (`golang.org/x/crypto/bcrypt`).
 
-**Flujo de autenticación:**
+**Almacenamiento de usuarios (MongoDB):**
 
-1. El usuario envía `POST /login` con credenciales JSON `{usuario, password}`
-2. El servidor valida contra una tabla de usuarios estáticos (extensible a MongoDB)
-3. Si las credenciales son válidas, se genera un token JWT firmado con HMAC-SHA256 que contiene:
+Los usuarios se almacenan en la colección `usuarios` de MongoDB con la siguiente estructura:
+- `usuario`: nombre único del usuario
+- `password_hash`: contraseña cifrada con bcrypt (costo default = 10)
+- `rol`: nivel de acceso (`"admin"` o `"user"`)
+- `creado_en`: timestamp UTC de creación
+
+Al iniciar el servidor, la función `InicializarAdmin()` verifica si existe al menos un usuario con rol `admin`. Si no lo hay, crea automáticamente la cuenta `admin` / `admin123` con contraseña cifrada.
+
+**Flujo de registro (`POST /register`):**
+
+1. El usuario envía `{usuario, password}` en JSON
+2. Se validan longitudes mínimas (usuario ≥ 3, password ≥ 6)
+3. Se verifica que el nombre de usuario no esté duplicado en MongoDB
+4. Se cifra la contraseña con `bcrypt.GenerateFromPassword`
+5. Se inserta el nuevo usuario con rol `"user"` por defecto
+6. Se retorna confirmación de creación exitosa
+
+**Flujo de autenticación (`POST /login`):**
+
+1. El usuario envía `{usuario, password}` en JSON
+2. Se busca el usuario en la colección `usuarios` de MongoDB
+3. Se compara la contraseña con el hash almacenado usando `bcrypt.CompareHashAndPassword`
+4. Si las credenciales son válidas, se genera un token JWT firmado con HMAC-SHA256 que contiene:
    - `usuario`: nombre del usuario autenticado
    - `rol`: nivel de acceso ("admin" o "user")
    - `exp`: expiración a las 24 horas
    - `iat`: timestamp de emisión
    - `iss`: "SecurityGO-TB2"
-4. El token se retorna al cliente para uso en requests subsiguientes
+5. El token se retorna al cliente para uso en requests subsiguientes
 
 **Middleware JWT:**
 
@@ -116,18 +142,51 @@ Las rutas de predicción (`/predict/*`), historial (`/predictions`) y caché (`/
 3. Verifica la expiración del token
 4. Si es válido, permite el paso al handler; si no, retorna `401 Unauthorized`
 
-Las rutas públicas (`/login`, `/health`, `/ws`) permanecen sin protección.
+Las rutas públicas (`/login`, `/register`, `/health`, `/ws`) permanecen sin protección.
 
 ---
 
 ## 4. Arquitectura Final Integrada
 
+### Estructura del Monorepo
+
+El proyecto sigue una estructura monorepo organizada por responsabilidad:
+
+```
+Seguridad_Ciudadana_GO/
+├── docker-compose.yml          # Infraestructura (MongoDB + Redis)
+├── backend/                    # Servidor Go (API + Cluster TCP)
+│   ├── main.go
+│   ├── api/                    # Handlers REST, Auth JWT, WebSocket
+│   │   ├── auth.go             # Login + Register + JWT Middleware
+│   │   ├── handlers.go         # Endpoints de predicción
+│   │   ├── server.go           # Configuración y rutas
+│   │   └── websocket.go        # Hub WebSocket
+│   ├── cluster/                # Cluster TCP distribuido
+│   │   ├── coordinator.go      # Coordinador con connection pool
+│   │   ├── tcp_node.go         # Nodos TCP (listeners)
+│   │   ├── worker.go           # Inferencia ML (Random Forest)
+│   │   └── tipos.go            # Tipos compartidos
+│   └── db/                     # Capa de datos
+│       ├── mongo.go            # MongoDB (predicciones + usuarios)
+│       └── redis.go            # Redis (caché SHA-256)
+├── frontend/                   # SPA React + Vite
+│   └── src/
+│       ├── components/         # Login, Predicciones, AdminPanel, Historial
+│       ├── context/            # AuthContext (sesión JWT)
+│       └── api.js              # Cliente HTTP centralizado
+├── models/                     # Modelos ML exportados (JSON)
+└── docs/                       # Documentación
+```
+
+### Diagrama de Arquitectura
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                     FRONTEND (React + Vite)                     │
 │  ┌──────────┐  ┌─────────────┐  ┌──────────┐  ┌─────────────┐  │
-│  │  Login   │  │ Predicciones│  │  Admin   │  │  Historial  │  │
-│  │  (JWT)   │  │ (3 modelos) │  │  (WS)    │  │  (Gráficos) │  │
+│  │  Login/  │  │ Predicciones│  │  Admin   │  │  Historial  │  │
+│  │ Register │  │ (3 modelos) │  │  (WS)    │  │  (Gráficos) │  │
 │  └────┬─────┘  └──────┬──────┘  └────┬─────┘  └──────┬──────┘  │
 │       │               │              │               │          │
 │       └───────────────┼──────────────┼───────────────┘          │
@@ -138,7 +197,7 @@ Las rutas públicas (`/login`, `/health`, `/ws`) permanecen sin protección.
 │                  API GATEWAY (Go :8080)                          │
 │   ┌───────────┐  ┌───────────┐  ┌─────────┐  ┌─────────────┐   │
 │   │ JWT Auth  │  │ Handlers  │  │   CORS  │  │  WS Hub     │   │
-│   │ Middleware│  │  REST     │  │ Middleware│ │  (Broadcast) │   │
+│   │ + bcrypt  │  │  REST     │  │ Middleware│ │  (Broadcast) │   │
 │   └───────────┘  └─────┬─────┘  └─────────┘  └──────┬──────┘   │
 │                        │                             │          │
 │              ┌─────────┴─────────┐                   │          │
@@ -161,7 +220,8 @@ Las rutas públicas (`/login`, `/health`, `/ws`) permanecen sin protección.
 │  ┌──────────────┐  ┌───────────────────┐    │
 │  │   MongoDB    │  │      Redis        │    │
 │  │   :27017     │  │     :6379         │    │
-│  │  (Data Lake) │  │  (Cache SHA-256)  │    │
+│  │  (Data Lake  │  │  (Cache SHA-256)  │    │
+│  │  + Usuarios) │  │                   │    │
 │  └──────────────┘  └───────────────────┘    │
 └─────────────────────────────────────────────┘
 ```
@@ -191,10 +251,10 @@ Las rutas públicas (`/login`, `/health`, `/ws`) permanecen sin protección.
 
 ## 6. Pruebas Funcionales (Entregable 3)
 
-### Prueba 5: Autenticación JWT End-to-End
-**Objetivo:** Validar que el flujo de login → token → acceso protegido funciona correctamente.
-- **Acción:** Se ingresa al frontend, se proporciona usuario `admin` / contraseña `admin123`.
-- **Resultado:** El servidor retorna un token JWT válido. Las peticiones de predicción se envían con header `Authorization: Bearer <token>`. Si se intenta acceder sin token, el servidor retorna `401 Unauthorized`.
+### Prueba 5: Registro de Usuario y Autenticación JWT End-to-End
+**Objetivo:** Validar el flujo completo de registro → login → token → acceso protegido.
+- **Acción:** Se ingresa al frontend, se selecciona la pestaña "Crear Cuenta", se registra un nuevo usuario con contraseña. Luego se inicia sesión con las credenciales recién creadas.
+- **Resultado:** El registro cifra la contraseña con bcrypt y la almacena en MongoDB. El login posterior valida el hash y retorna un token JWT válido. Las peticiones de predicción se envían con header `Authorization: Bearer <token>`. Si se intenta acceder sin token, el servidor retorna `401 Unauthorized`. Si se intenta registrar un usuario duplicado, retorna `409 Conflict`.
 
 ### Prueba 6: Interacción Frontend ↔ Cluster TCP
 **Objetivo:** Comprobar que el formulario de predicción del frontend ejecuta correctamente el flujo distribuido completo.
@@ -206,17 +266,21 @@ Las rutas públicas (`/login`, `/health`, `/ws`) permanecen sin protección.
 - **Acción:** Se abren dos pestañas del navegador: una en el panel de predicciones y otra en el panel admin.
 - **Resultado:** Cada predicción ejecutada desde la primera pestaña se refleja instantáneamente en el stream de eventos de la segunda pestaña, con gráficos actualizados dinámicamente.
 
+### Prueba 8: Historial de Predicciones con MongoDB
+**Objetivo:** Verificar que las predicciones se persisten correctamente y se visualizan con gráficos estadísticos.
+- **Acción:** Se ejecutan múltiples predicciones con distintos modelos. Se navega a la pestaña "Historial".
+- **Resultado:** Los gráficos de distribución por modelo, actividad en el tiempo y latencia promedio se pueblan con los datos reales almacenados en MongoDB. La tabla de registros muestra timestamp, modelo, nodo, duración y resultado de cada predicción. Los filtros por modelo y límite funcionan correctamente.
+
 ---
 
 ## 7. Instrucciones de Ejecución
 
 ```bash
 # 1. Levantar infraestructura de bases de datos
-cd PC4
 docker compose up -d
 
 # 2. Iniciar el backend Go (API + Cluster TCP)
-cd PC4
+cd backend
 go run .
 
 # 3. Iniciar el frontend en modo desarrollo
@@ -225,12 +289,30 @@ npm install
 npm run dev
 ```
 
-**Credenciales de prueba:**
-| Usuario | Contraseña | Rol |
-| ------- | ---------- | --- |
-| admin | admin123 | admin |
-| user | user123 | user |
-| rosa | seguridad2026 | admin |
+**Cuenta administrador por defecto:**
+
+Al iniciar el backend por primera vez, se crea automáticamente un usuario administrador si no existe ninguno en la base de datos:
+
+| Usuario | Contraseña | Rol | Creación |
+| ------- | ---------- | --- | -------- |
+| admin | admin123 | admin | Automática (si no hay admins) |
+
+Los demás usuarios se registran desde la interfaz web (pestaña "Crear Cuenta") con rol `user` por defecto.
+
+**Endpoints disponibles:**
+
+| Método | Ruta | Protegido | Descripción |
+| ------ | ---- | --------- | ----------- |
+| POST | `/login` | No | Autenticación con JWT |
+| POST | `/register` | No | Registro de nuevo usuario |
+| GET | `/health` | No | Estado del sistema |
+| WS | `/ws` | No | WebSocket (eventos en tiempo real) |
+| POST | `/predict/crime-type` | JWT | Predicción tipo de crimen |
+| POST | `/predict/risk-zone` | JWT | Predicción zona de riesgo |
+| POST | `/predict/arrest-prob` | JWT | Predicción prob. de arresto |
+| GET | `/predictions` | JWT | Historial de predicciones |
+| GET | `/cache/stats` | JWT | Estadísticas de caché Redis |
+
 
 ---
 
@@ -243,5 +325,6 @@ El proyecto SecurityGO demuestra una integración completa de los conceptos de *
 3. **Persistencia dual** (Redis + MongoDB) con estrategias inteligentes de caché y escritura asíncrona.
 4. **Comunicación en tiempo real** via WebSocket para observabilidad del sistema.
 5. **Interfaz web moderna** con React, autenticación JWT, y visualizaciones interactivas.
+6. **Seguridad** con cifrado bcrypt para contraseñas, tokens JWT con expiración, y middleware de autorización en todas las rutas sensibles.
 
 El diseño modular permite escalar horizontalmente agregando más nodos TCP sin modificar el frontend ni el coordinador, demostrando los principios de arquitectura distribuida estudiados en el curso.
