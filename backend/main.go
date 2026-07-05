@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"securitygo_pc4/api"
+	"securitygo_backend/api"
 )
 
 // ═══════════════════════════════════════════════════════
@@ -30,31 +30,44 @@ func main() {
 
 	cfg := api.ConfigPredeterminada()
 
-	// Permitir override por argumentos simples
+	uploadModels := false
 	args := os.Args[1:]
-	for i := 0; i < len(args)-1; i++ {
-		switch args[i] {
-		case "--port":
-			cfg.Puerto = args[i+1]
-		case "--mongo":
-			cfg.MongoURI = args[i+1]
-		case "--redis":
-			cfg.RedisURI = args[i+1]
-		case "--model1":
-			cfg.RutaModel1 = args[i+1]
-		case "--model2":
-			cfg.RutaModel2 = args[i+1]
-		case "--model3":
-			cfg.RutaModel3 = args[i+1]
-		case "--workers":
-			fmt.Sscanf(args[i+1], "%d", &cfg.WorkersPorNodo)
-		case "--node-port1":
-			cfg.PuertoNodo1 = args[i+1]
-		case "--node-port2":
-			cfg.PuertoNodo2 = args[i+1]
-		case "--node-port3":
-			cfg.PuertoNodo3 = args[i+1]
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--upload-models" {
+			uploadModels = true
+			continue
 		}
+		if i+1 < len(args) {
+			switch args[i] {
+			case "--port":
+				cfg.Puerto = args[i+1]
+			case "--mongo":
+				cfg.MongoURI = args[i+1]
+			case "--redis":
+				cfg.RedisURI = args[i+1]
+			case "--model1":
+				cfg.RutaModel1 = args[i+1]
+			case "--model2":
+				cfg.RutaModel2 = args[i+1]
+			case "--model3":
+				cfg.RutaModel3 = args[i+1]
+			case "--workers":
+				fmt.Sscanf(args[i+1], "%d", &cfg.WorkersPorNodo)
+			case "--node-port1":
+				cfg.PuertoNodo1 = args[i+1]
+			case "--node-port2":
+				cfg.PuertoNodo2 = args[i+1]
+			case "--node-port3":
+				cfg.PuertoNodo3 = args[i+1]
+			}
+			i++
+		}
+	}
+
+	if uploadModels {
+		log.Println("[Init] Modo --upload-models activo. Subiendo modelos a MongoDB...")
+		api.SubirModelosAMongo(cfg)
+		return
 	}
 
 	if err := api.IniciarServidor(cfg); err != nil {

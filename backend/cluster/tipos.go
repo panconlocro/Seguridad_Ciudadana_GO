@@ -49,3 +49,8 @@ type MensajeResultado struct {
 	DuracionMs int64                  `json:"duracion_ms"`
 	ErrorMsg   string                 `json:"error,omitempty"`
 }
+
+// ProveedorModelos define cómo obtener modelos persistidos
+type ProveedorModelos interface {
+	ObtenerModelo(tipo string) (*ModeloJSON, error)
+}

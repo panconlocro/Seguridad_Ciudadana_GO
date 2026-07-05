@@ -1,6 +1,6 @@
-# run_pc4.ps1 — SecurityGO PC4
-# Uso: .\run_pc4.ps1 [--port 8080] [--mongo mongodb://localhost:27017] [--workers 2]
-# Ejecutar desde la carpeta PC4/ dentro del repo
+# run_backend.ps1 — SecurityGO Backend (TB2)
+# Uso: .\run_backend.ps1 [--port 8080] [--mongo mongodb://localhost:27017] [--workers 2]
+# Ejecutar desde la carpeta backend/ dentro del repo
 
 param(
     [string]$port    = "8080",
@@ -13,7 +13,7 @@ param(
 
 Write-Host ""
 Write-Host "╔══════════════════════════════════════════════╗" -ForegroundColor Cyan
-Write-Host "║      SecurityGO PC4 — API REST + Cluster     ║" -ForegroundColor Cyan
+Write-Host "║      SecurityGO Backend — API REST + Cluster ║" -ForegroundColor Cyan
 Write-Host "╚══════════════════════════════════════════════╝" -ForegroundColor Cyan
 Write-Host ""
 
@@ -21,7 +21,7 @@ Write-Host ""
 foreach ($path in @($model1, $model2, $model3)) {
     if (-not (Test-Path $path)) {
         Write-Host "[ERROR] No se encontró el modelo: $path" -ForegroundColor Red
-        Write-Host "  Asegúrate de haber ejecutado el PC3 primero (go run . run --type all)" -ForegroundColor Yellow
+        Write-Host "  Asegúrate de haber ejecutado el PC3 primero" -ForegroundColor Yellow
         exit 1
     }
 }

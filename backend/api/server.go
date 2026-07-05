@@ -10,8 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"securitygo_pc4/cluster"
-	"securitygo_pc4/db"
+	"securitygo_backend/cluster"
+	"securitygo_backend/db"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // ═══════════════════════════════════════════════════════
@@ -69,7 +71,11 @@ func IniciarServidor(cfg ConfigServidor) error {
 		return fmt.Errorf("error MongoDB: %w", err)
 	}
 	defer mongo.Cerrar()
-	mongo.GuardarLog("INFO", "servidor", "SecurityGO PC4 iniciado")
+	mongo.GuardarLog("INFO", "servidor", "Modelos Iniciados")
+
+	// Inicializar usuario admin por defecto si no hay ninguno
+	hashAdmin, _ := bcrypt.GenerateFromPassword([]byte("admin123"), bcrypt.DefaultCost)
+	mongo.InicializarAdmin(string(hashAdmin))
 
 	// ── 2. Conectar Redis (modo degradado si no disponible) ──
 	log.Println("[Init] Conectando a Redis...")
@@ -86,17 +92,17 @@ func IniciarServidor(cfg ConfigServidor) error {
 	// ── 3. Iniciar nodos TCP (cada uno carga su modelo ML) ──
 	log.Println("[Init] Iniciando nodos TCP del cluster...")
 	type cfgNodo struct {
-		id, puerto, ruta string
+		id, puerto, tipo string
 	}
 	nodosConfig := []cfgNodo{
-		{"nodo-model1", cfg.PuertoNodo1, cfg.RutaModel1},
-		{"nodo-model2", cfg.PuertoNodo2, cfg.RutaModel2},
-		{"nodo-model3", cfg.PuertoNodo3, cfg.RutaModel3},
+		{"nodo-model1", cfg.PuertoNodo1, "model1"},
+		{"nodo-model2", cfg.PuertoNodo2, "model2"},
+		{"nodo-model3", cfg.PuertoNodo3, "model3"},
 	}
 
 	var nodosTCP []*cluster.NodoTCP
 	for _, n := range nodosConfig {
-		nodo, err := cluster.NuevoNodoTCP(n.id, n.puerto, n.ruta)
+		nodo, err := cluster.NuevoNodoTCP(n.id, n.puerto, n.tipo, mongo)
 		if err != nil {
 			return fmt.Errorf("error creando nodo TCP %s: %w", n.id, err)
 		}
@@ -131,13 +137,27 @@ func IniciarServidor(cfg ConfigServidor) error {
 	// ── 6. Registrar rutas ──
 	handler := NuevoHandler(coord, mongo, redisClient, hub)
 	mux := http.NewServeMux()
-	mux.HandleFunc("/predict/crime-type", handler.PredecirTipoCrimen)
-	mux.HandleFunc("/predict/risk-zone", handler.PredecirZonaRiesgo)
-	mux.HandleFunc("/predict/arrest-prob", handler.PredecirProbArresto)
+
+	// Rutas públicas (sin JWT)
+	mux.HandleFunc("/login", handler.Login)
+	mux.HandleFunc("/register", handler.Register)
 	mux.HandleFunc("/health", handler.HealthCheck)
-	mux.HandleFunc("/predictions", handler.HistorialPredicciones)
-	mux.HandleFunc("/cache/stats", handler.EstadisticasCache)
 	mux.HandleFunc("/ws", hub.HandleWS)
+
+	// Rutas protegidas con JWT
+	protegido := http.NewServeMux()
+	protegido.HandleFunc("/predict/crime-type", handler.PredecirTipoCrimen)
+	protegido.HandleFunc("/predict/risk-zone", handler.PredecirZonaRiesgo)
+	protegido.HandleFunc("/predict/arrest-prob", handler.PredecirProbArresto)
+	protegido.HandleFunc("/predictions", handler.HistorialPredicciones)
+	protegido.HandleFunc("/cache/stats", handler.EstadisticasCache)
+	mux.Handle("/predict/", JWTMiddleware(protegido))
+	mux.Handle("/predictions", JWTMiddleware(protegido))
+	mux.Handle("/cache/", JWTMiddleware(protegido))
+
+	// Servir frontend estático (SPA)
+	fs := http.FileServer(http.Dir("../frontend/dist"))
+	mux.Handle("/app/", http.StripPrefix("/app/", fs))
 
 	http.Handle("/", CORSMiddleware(LoggingMiddleware(mux)))
 
@@ -155,6 +175,8 @@ func IniciarServidor(cfg ConfigServidor) error {
 	go func() {
 		fmt.Printf("\n[Servidor] ✔ Escuchando en http://localhost:%s\n\n", cfg.Puerto)
 		fmt.Println("  Endpoints disponibles:")
+		fmt.Printf("  POST http://localhost:%s/login\n", cfg.Puerto)
+		fmt.Printf("  POST http://localhost:%s/register\n", cfg.Puerto)
 		fmt.Printf("  POST http://localhost:%s/predict/crime-type\n", cfg.Puerto)
 		fmt.Printf("  POST http://localhost:%s/predict/risk-zone\n", cfg.Puerto)
 		fmt.Printf("  POST http://localhost:%s/predict/arrest-prob\n", cfg.Puerto)
@@ -180,4 +202,32 @@ func getEnv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// SubirModelosAMongo lee los modelos JSON locales y los sube a MongoDB
+func SubirModelosAMongo(cfg ConfigServidor) {
+	mongoClient, err := db.NuevoClienteMongo(cfg.MongoURI)
+	if err != nil {
+		log.Fatalf("[Upload] error conectando a MongoDB: %v", err)
+	}
+	defer mongoClient.Cerrar()
+
+	rutas := map[string]string{
+		"model1": cfg.RutaModel1,
+		"model2": cfg.RutaModel2,
+		"model3": cfg.RutaModel3,
+	}
+
+	for tipo, ruta := range rutas {
+		log.Printf("[Upload] Leyendo %s desde %s...", tipo, ruta)
+		modelo, err := cluster.CargarModeloJSON(ruta)
+		if err != nil {
+			log.Printf("[Upload] ⚠ Advertencia: no se pudo cargar %s: %v", tipo, err)
+			continue
+		}
+		if err := mongoClient.GuardarModelo(modelo); err != nil {
+			log.Fatalf("[Upload] error guardando %s en Mongo: %v", tipo, err)
+		}
+	}
+	log.Println("[Upload] ✔ Proceso de subida finalizado.")
 }

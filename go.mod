@@ -1,3 +1,3 @@
-module seguridad-ciudadana
+module securitygo_scripts
 
-go 1.21
+go 1.26.3
