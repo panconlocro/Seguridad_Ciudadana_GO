@@ -180,7 +180,7 @@ func IniciarServidor(cfg ConfigServidor) error {
 
 	// Servir frontend estático (SPA)
 	fs := http.FileServer(http.Dir(cfg.FrontendDist))
-	mux.Handle("/app/", http.StripPrefix("/app/", fs))
+	mux.Handle("/", fs)
 
 	http.Handle("/", CORSMiddleware(LoggingMiddleware(mux)))
 

@@ -3,7 +3,8 @@
 // Centraliza todas las llamadas HTTP al backend Go
 // ═══════════════════════════════════════════════════════
 
-const API_BASE = 'http://localhost:8080';
+// En desarrollo usa el puerto 8080, en producción (Render) usa rutas relativas
+const API_BASE = import.meta.env.DEV ? 'http://localhost:8080' : '';
 
 /**
  * Helper para peticiones con JWT
@@ -100,7 +101,11 @@ export async function entrenarModelo(formData) {
 
 // ── WebSocket ──
 export function crearWebSocket(onMessage, onOpen, onClose) {
-  const ws = new WebSocket('ws://localhost:8080/ws');
+  const wsUrl = import.meta.env.DEV 
+    ? 'ws://localhost:8080/ws' 
+    : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+    
+  const ws = new WebSocket(wsUrl);
   
   ws.onopen = () => {
     console.log('[WS] Conectado');
