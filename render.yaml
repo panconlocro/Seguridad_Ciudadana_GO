@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: securitygo-app
+    env: go
+    buildCommand: "./build.sh"
+    startCommand: "cd backend && ./server"
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: MONGO_URI
+        sync: false
+      - key: REDIS_URI
+        sync: false
+      - key: FRONTEND_DIST
+        value: "./public"
