@@ -134,7 +134,12 @@ body::before {
   will-change: transform, opacity;
 }
 
-
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    animation: none;
+    display: none;
+  }
+}
 /* ── Urban Grid Background ── */
 body::after {
   content: '';

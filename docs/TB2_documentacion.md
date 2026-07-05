@@ -38,7 +38,7 @@ Para el entregable final se rediseñó completamente la interfaz bajo el concept
 - **Paleta de colores:** Fondo oscuro (`--midnight`), acentos en ámbar (`--signal-amber`) para acciones y verde azulado (`--grid-teal`) para datos positivos.
 - **Tipografía:** *Space Grotesk* para títulos (display), *DM Sans* para el cuerpo y *JetBrains Mono* para datos técnicos.
 - **Layout:** *Top navigation bar* horizontal (reemplazando la antigua sidebar) para maximizar el espacio de formularios y gráficos.
-- **Detalles Visuales:** Animación sutil de *scan-line* y fondo de grilla urbana (radar), abandonando el glassmorphism genérico.
+- **Detalles Visuales:** Animación ambiental de *radar-sweep* en el fondo de grilla urbana (optimizada para GPU mediante `will-change: transform` y respetando accesibilidad con `prefers-reduced-motion`), abandonando el glassmorphism genérico.
 
 ### Componentes implementados
 
@@ -56,12 +56,12 @@ El componente `Predicciones.jsx` implementa formularios dinámicos para los 3 mo
 2. **Predicción de Zona de Riesgo** (model2 → `:9002`)
 3. **Estimación de Probabilidad de Arresto** (model3 → `:9003`)
 
-Cada formulario se genera automáticamente a partir de la configuración del modelo, incluyendo validaciones de rango. Los resultados muestran:
-- La predicción del modelo
+Cada formulario se genera automáticamente a partir de la configuración del modelo, incluyendo validaciones de rango y **tooltips informativos** (globos de ayuda visuales) para explicar cada variable al usuario. Los resultados se renderizan con un **diseño amigable y adaptado al tipo de modelo** (ej. colores dinámicos de severidad o enlaces directos a Google Maps), e incluyen:
+- La predicción final del modelo
 - Indicador de origen (Cache Hit ⚡ vs TCP Cluster 🖥️)
 - Tiempo de respuesta en milisegundos
 - Nodo worker que procesó la solicitud
-- Vista JSON expandible del payload completo
+- Vista JSON expandible del payload completo para auditoría
 
 #### 2.3 Panel de Administración (Tiempo Real)
 
