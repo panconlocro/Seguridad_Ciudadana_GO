@@ -4,8 +4,7 @@ Este proyecto es un sistema de análisis, modelado predictivo y visualización (
 
 ## 🌐 Pruebas en Vivo (Live Demo)
 Puedes probar el proyecto ya desplegado y funcionando en la nube en el siguiente enlace:
-- **[https://tu-proyecto.netlify.app](https://tu-proyecto.netlify.app)** *(Reemplaza con tu URL real de Netlify)*
-
+- **[https://securitygo.netlify.app/](https://securitygo.netlify.app/)**
 ---
 
 ## 🚀 Cómo correr el proyecto localmente
