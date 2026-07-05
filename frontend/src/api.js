@@ -3,7 +3,7 @@
 // Centraliza todas las llamadas HTTP al backend Go
 // ═══════════════════════════════════════════════════════
 
-const API_BASE = 'http://localhost:8080';
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 /**
  * Helper para peticiones con JWT
@@ -89,7 +89,8 @@ export async function obtenerCacheStats() {
 
 // ── WebSocket ──
 export function crearWebSocket(onMessage, onOpen, onClose) {
-  const ws = new WebSocket('ws://localhost:8080/ws');
+  const wsUrl = API_BASE.replace(/^http/, 'ws') + '/ws';
+  const ws = new WebSocket(wsUrl);
   
   ws.onopen = () => {
     console.log('[WS] Conectado');

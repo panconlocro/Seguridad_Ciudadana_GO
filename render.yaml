@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: securitygo-backend
+    env: docker
+    region: ohio
+    plan: free
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: REDIS_URI
+        sync: false
+      # Los puertos por defecto y modelos ya no son necesarios localmente ya que
+      # leen desde Mongo, pero para mantener la configuración compatible:
+      - key: PORT
+        value: "8080"
