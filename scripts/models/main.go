@@ -18,6 +18,7 @@ type opcionesCLI struct {
 	modelPath  string
 	outputPath string
 	features   string
+	workerList string
 	cfg        ConfigEntrenamiento
 }
 
@@ -34,6 +35,7 @@ func parsearOpciones(command string, args []string) (opcionesCLI, error) {
 	fs.StringVar(&opciones.modelPath, "model", "", "ruta a un modelo JSON guardado")
 	fs.StringVar(&opciones.outputPath, "output", "", "ruta donde guardar el modelo JSON")
 	fs.StringVar(&opciones.features, "features", "", "features numéricas separadas por comas")
+	fs.StringVar(&opciones.workerList, "worker-list", "2,4,16", "workers para benchmark-suite separados por comas")
 	fs.IntVar(&opciones.cfg.NumArboles, "trees", cfg.NumArboles, "cantidad de árboles por modelo")
 	fs.IntVar(&opciones.cfg.MaxProf, "depth", cfg.MaxProf, "profundidad máxima de cada árbol")
 	fs.IntVar(&opciones.cfg.MinMuestras, "min-samples", cfg.MinMuestras, "mínimo de muestras para dividir un nodo")
@@ -66,6 +68,7 @@ func imprimirUso() {
 	fmt.Fprintln(os.Stderr, "  predict     Carga un modelo guardado y predice features")
 	fmt.Fprintln(os.Stderr, "  run         Ejecuta train/test, evaluación, predicción y guardado")
 	fmt.Fprintln(os.Stderr, "  benchmark   Compara entrenamiento con 1 worker vs N workers")
+	fmt.Fprintln(os.Stderr, "  benchmark-suite  Compara 1 worker una sola vez vs varios workers")
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintln(os.Stderr, "Comandos compatibles: model1, model2, model3, all")
 	fmt.Fprintln(os.Stderr)
@@ -75,6 +78,7 @@ func imprimirUso() {
 	fmt.Fprintln(os.Stderr, "  --model PATH        modelo JSON para evaluate/predict")
 	fmt.Fprintln(os.Stderr, "  --output PATH       destino del modelo entrenado")
 	fmt.Fprintln(os.Stderr, "  --workers N         workers del pool de árboles")
+	fmt.Fprintln(os.Stderr, "  --worker-list LIST  workers para benchmark-suite (default: 2,4,16)")
 	fmt.Fprintln(os.Stderr, "  --trees N           cantidad de árboles")
 	fmt.Fprintln(os.Stderr, "  --depth N           profundidad máxima")
 	fmt.Fprintln(os.Stderr, "  --min-samples N     muestras mínimas por división")
@@ -297,6 +301,16 @@ func run() error {
 			return err
 		}
 		return BenchmarkEntrenamiento(datos, opciones.modelType, opciones.cfg)
+	case "benchmark-suite":
+		datos, err := cargarDatos(opciones.dataPath)
+		if err != nil {
+			return err
+		}
+		workers, err := parsearListaWorkers(opciones.workerList)
+		if err != nil {
+			return err
+		}
+		return BenchmarkEntrenamientoSuite(datos, opciones.modelType, opciones.cfg, workers)
 	case "model1", "model2", "model3":
 		opciones.modelType = command
 		return ejecutarRun(opciones, true)
