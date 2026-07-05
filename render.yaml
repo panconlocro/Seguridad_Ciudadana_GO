@@ -2,6 +2,7 @@ services:
   - type: web
     name: securitygo-app
     env: go
+    plan: free
     buildCommand: "./build.sh"
     startCommand: "cd backend && ./server"
     envVars:
