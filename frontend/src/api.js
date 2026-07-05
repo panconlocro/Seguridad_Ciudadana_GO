@@ -30,7 +30,14 @@ async function apiFetch(endpoint, options = {}) {
     headers,
   });
 
-  const data = await res.json();
+  const text = await res.text();
+  let data;
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch (e) {
+    console.error("[API Fetch Error] Respuesta no es JSON válido:", text);
+    throw new Error(`Error del servidor (${res.status}): Respuesta inesperada.`);
+  }
   
   if (!res.ok) {
     throw new Error(data.error || `Error ${res.status}`);
